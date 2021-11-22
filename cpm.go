@@ -34,10 +34,16 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
+type BuildSet struct {
+	Os   string
+	Cmd  string
+	Args []string
+}
+
 type PacUnit struct {
 	Name    string
 	Git     string
-	Build   string
+	Build   []*BuildSet
 	Depends []*PacUnit
 }
 
@@ -45,7 +51,9 @@ var devroot string         //root of development tree
 var root_descriptor string //path of root module
 const descriptor_name = "cpm.json"
 
-var seen map[string]bool
+var fetched map[string]bool
+var built map[string]bool
+
 var inprocess []string
 
 //command line flags
@@ -84,15 +92,18 @@ func main() {
 	}
 
 	Verboseln("DEV_ROOT = " + devroot)
+	os.Mkdir(devroot+"lib", 0755)
 
-	seen = make(map[string]bool)
+	fetched = make(map[string]bool)
 	var root PacUnit
 	var data []byte
 	if data, err = os.ReadFile(root_descriptor); err != nil {
 		log.Fatalf("cannot open '%s' file", root_descriptor)
 	}
 
-	json.Unmarshal(data, &root)
+	if err = json.Unmarshal(data, &root); err != nil {
+		log.Fatalf("cannot parse %s - %v\n", root_descriptor, err)
+	}
 
 	os.Chdir(devroot + root.Name)
 
@@ -100,22 +111,19 @@ func main() {
 	Verboseln("Changed directory to " + cwd)
 
 	inprocess = make([]string, 0, 10)
-	fetch(root)
+	fetch(&root)
+	if !*fetch_flag {
+		built = make(map[string]bool)
+		build(&root)
+	}
 }
 
 // Fetch a package and all its dependents
-func fetch(p PacUnit) {
-	if seen[p.Name] {
+func fetch(p *PacUnit) {
+	if fetched[p.Name] {
 		Verboseln("Package " + p.Name + " has already been configured")
 		return
 	}
-	for _, w := range inprocess {
-		if w == p.Name {
-			log.Fatalf("Package %s depends on itself.\n Dependency chain: %v", p.Name, inprocess)
-		}
-	}
-
-	inprocess = append(inprocess, p.Name)
 	pacdir := devroot + p.Name
 	if os.Chdir(pacdir) != nil {
 		if err := os.Mkdir(pacdir, 0666); err != nil {
@@ -137,21 +145,21 @@ func fetch(p PacUnit) {
 	w.Pull(&git.PullOptions{})
 	os.Symlink(devroot+"lib", "lib")
 
-	var pp PacUnit
 	data, err := os.ReadFile(descriptor_name)
 	if err != nil {
 		Verbosef(" %s\\%s file not found. Assuming no dependencies\n", cwd, descriptor_name)
-		pp.Name = p.Name
 	} else {
-		json.Unmarshal(data, &pp)
+		if err = json.Unmarshal(data, &p); err != nil {
+			log.Fatalf("cannot parse %s - %v", descriptor_name, err)
+		}
 	}
-	seen[p.Name] = true
+	fetched[p.Name] = true
 
-	if pp.Depends != nil {
+	if p.Depends != nil {
 		//setup all dependent packages
 		var d *PacUnit
-		for _, d = range pp.Depends {
-			fetch(*d)
+		for _, d = range p.Depends {
+			fetch(d)
 		}
 
 		if os.Chdir(pacdir+"/include") != nil {
@@ -160,49 +168,123 @@ func fetch(p PacUnit) {
 		}
 
 		//create symlinks to dependents
-		cwd, _ = os.Getwd()
-		for _, dep := range pp.Depends {
-			Verboseln("Creating symlink " + cwd + "\\" + dep.Name + " --> " + dep.Name)
-			os.Symlink(devroot+cwd+"\\"+dep.Name, dep.Name)
+		for _, dep := range p.Depends {
+			Verboseln("Creating symlink " + devroot + dep.Name + "/include/" + dep.Name + " --> " + dep.Name)
+			os.Symlink(devroot+dep.Name+"/include/"+dep.Name, dep.Name)
+		}
+	}
+}
+
+//Build a packge after having built first its dependents
+func build(p *PacUnit) {
+	if built[p.Name] {
+		Verboseln("Package " + p.Name + " has already been built")
+		fmt.Printf("Build map: % v", built)
+		return
+	}
+	for _, w := range inprocess {
+		if w == p.Name {
+			log.Fatalf("Package %s depends on itself.\n Dependency chain: %v", p.Name, inprocess)
 		}
 	}
 
-	os.Chdir(pacdir)
-	if !*fetch_flag {
-		if len(p.Build) > 0 {
-			Verboseln("Building in " + cwd + " : " + p.Build)
-		} else {
-			Verboseln("No build command specified for " + p.Name)
+	//keep track of packeges that are in process to avoid dependency cycles
+	inprocess = append(inprocess, p.Name)
+	pacdir := devroot + p.Name
+	os.Chdir(pacdir) //that should be ok. Package has been fetched already
+	cwd, _ := os.Getwd()
+	Verbosef("Building %s in %s \n", p.Name, cwd)
+
+	//First, build all dependent packages
+	if p.Depends != nil {
+		var d *PacUnit
+		for _, d = range p.Depends {
+			build(d)
+			os.Chdir(cwd)
 		}
 	}
+
+	// then build self
+	if ret, err := do_build(p.Build); ret != 0 {
+		log.Fatalf("Build aborted - %v", err)
+	}
 	inprocess = inprocess[:len(inprocess)-1]
+	built[p.Name] = true
+}
+
+/*
+	Execute the appropriate build command for a package. If there is a specific
+	command for the current OS envirnoment, use that one. Otherwise choose a
+	generic one (os set to "any" or "")
+*/
+func do_build(b []*BuildSet) (int, error) {
+	for _, cfg := range b {
+		if cfg.Os == runtime.GOOS {
+			Verbosef("OS: %s cmd: %s % v\n", cfg.Os, cfg.Cmd, cfg.Args)
+			return Run(cfg.Cmd, cfg.Args)
+		}
+	}
+	for _, cfg := range b {
+		if cfg.Os == "any" || cfg.Os == "" {
+			Verbosef("cmd: %s % v\n", cfg.Cmd, cfg.Args)
+			return Run(cfg.Cmd, cfg.Args)
+		}
+	}
+	Verboseln("No build command found!")
+	return 0, nil
+}
+
+/*
+  Executes a program and waits for it to finish.
+  Returns exit code and error condition.
+
+  Seems in Windows, the osStartProcess function needs the absolute path of the program.
+  The easiest way around it is to run a CMD shell with the program passed as an argument:
+    %SystemRoot%\\system32\cmd.exe /c prog args
+*/
+func Run(prog string, args []string) (int, error) {
+	if runtime.GOOS == "windows" {
+		if len(args) == 0 {
+			args = append(args, "/C")
+		} else {
+			args = append(args[:1], args[0:]...)
+			args[0] = "/C"
+		}
+
+		if len(args) == 1 {
+			args = append(args, prog)
+		} else {
+			args = append(args[:2], args[1:]...)
+			args[1] = prog
+		}
+		systemRootDir := os.Getenv("SystemRoot")
+		prog = systemRootDir + "\\System32\\cmd.exe"
+		//insert "/C" argument for CMD
+	}
+	var proc *os.Process
+	var s *os.ProcessState
+	var err error
+	var attr os.ProcAttr
+	attr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
+
+	if proc, err = os.StartProcess(prog, args, &attr); err != nil {
+		return -1, err
+	}
+	if s, err = proc.Wait(); err != nil {
+		return -1, err
+	}
+	return s.ExitCode(), err
 }
 
 func clone(url, dir string) bool {
 	fullpath := devroot + dir
-	var attr os.ProcAttr
-	attr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
-	var args []string
-	var arg0 string
-	if runtime.GOOS == "windows" {
-		args = []string{"/C", "git", "clone", url, fullpath}
-		systemRootDir := os.Getenv("SystemRoot")
-		arg0 = systemRootDir + "\\System32\\cmd.exe"
-	} else {
-		args = []string{"git", "clone", url, fullpath}
-		arg0 = "git"
-	}
-	Verbosef("Cloning: % v", args)
 
-	var exe *os.Process
-	var err error
-	if exe, err = os.StartProcess(arg0, args, &attr); err != nil {
-		log.Fatalf("Command % v failed\nError: %v\n", args, err)
+	Verbosef("Cloning: %s in %s", url, dir)
+
+	if stat, err := Run("git", []string{"clone", url, fullpath}); err != nil || stat != 0 {
+		log.Fatalf("Cloning failed \nStatus %d Error: %v\n", stat, err)
 	}
-	if s, ok := exe.Wait(); ok != nil {
-		return s.ExitCode() == 0
-	}
-	return false
+	return true
 }
 
 func Verboseln(s string) {
