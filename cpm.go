@@ -18,11 +18,11 @@ package main
 		-v verbose
 
 	The program opens the '${DEV_ROOT}/<project>/cpm.json' file and
-	recursively searches for all dependencies.
+	recursively searches and builds all dependencies.
 
 	${DEV_ROOT} environment variable is the root of development tree.
-
 */
+
 import (
 	"encoding/json"
 	"flag"
@@ -30,8 +30,6 @@ import (
 	"log"
 	"os"
 	"runtime"
-
-	"github.com/go-git/go-git/v5"
 )
 
 type BuildCommands struct {
@@ -140,13 +138,7 @@ func fetch(p *PacUnit) {
 	cwd, _ := os.Getwd()
 	Verbosef("Setting up %s in %s \n", p.Name, cwd)
 
-	r, err := git.PlainOpen(".")
-	if err != nil {
-		log.Fatalf("cannot open repository in %s error %v", cwd, err)
-	}
-
-	w, _ := r.Worktree()
-	w.Pull(&git.PullOptions{})
+	pull(p.Git)
 	os.Symlink(devroot+"lib", "lib")
 
 	data, err := os.ReadFile(descriptor_name)
@@ -303,7 +295,7 @@ func Run(prog string, args []string) (int, error) {
 	return s.ExitCode(), err
 }
 
-func clone(url, dir string) bool {
+func clone(url, dir string) {
 	fullpath := devroot + dir
 
 	Verbosef("Cloning: %s in %s\n", url, dir)
@@ -311,7 +303,14 @@ func clone(url, dir string) bool {
 	if stat, err := Run("git", []string{"clone", url, fullpath}); err != nil || stat != 0 {
 		log.Fatalf("Cloning failed \nStatus %d Error: %v\n", stat, err)
 	}
-	return true
+}
+
+func pull(url string) {
+	Verbosef("Pulling: %s\n", url)
+
+	if stat, err := Run("git", []string{"pull", url}); err != nil || stat != 0 {
+		log.Fatalf("Pulling failed \nStatus %d Error: %v\n", stat, err)
+	}
 }
 
 func Verboseln(s string) {
