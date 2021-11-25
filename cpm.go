@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"runtime"
 )
 
@@ -127,18 +128,21 @@ func main() {
 // Fetch a package and all its dependents
 func fetch(p *PacUnit) {
 	pacdir := devroot + p.Name
-	if os.Chdir(pacdir) != nil {
+
+	if _, err := os.Stat(pacdir); os.IsNotExist(err) {
 		if err := os.Mkdir(pacdir, 0666); err != nil {
 			log.Fatalf("error %d - cannot create folder %s", err, pacdir)
 		}
 		clone(p.Git, p.Name)
 		os.Chdir(pacdir)
+	} else {
+		os.Chdir(pacdir)
+		pull(p.Git)
 	}
 
 	cwd, _ := os.Getwd()
 	Verbosef("Setting up %s in %s \n", p.Name, cwd)
 
-	pull(p.Git)
 	os.Symlink(devroot+"lib", "lib")
 
 	data, err := os.ReadFile(descriptor_name)
@@ -253,46 +257,15 @@ func do_build(b []BuildCommands) (int, error) {
 	return 0, nil
 }
 
-/*
-  Executes a program and waits for it to finish.
-  Returns exit code and error condition.
-
-  Seems in Windows, the osStartProcess function needs the absolute path of the program.
-  The easiest way around it is to run a CMD shell with the program passed as an argument:
-    %SystemRoot%\\system32\cmd.exe /c prog args
-*/
 func Run(prog string, args []string) (int, error) {
-	if runtime.GOOS == "windows" {
-		if len(args) == 0 {
-			args = append(args, "/C")
-		} else {
-			args = append(args[:1], args[0:]...)
-			args[0] = "/C"
-		}
-
-		if len(args) == 1 {
-			args = append(args, prog)
-		} else {
-			args = append(args[:2], args[1:]...)
-			args[1] = prog
-		}
-		systemRootDir := os.Getenv("SystemRoot")
-		prog = systemRootDir + "\\System32\\cmd.exe"
-		//insert "/C" argument for CMD
-	}
-	var proc *os.Process
-	var s *os.ProcessState
-	var err error
-	var attr os.ProcAttr
-	attr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
-
-	if proc, err = os.StartProcess(prog, args, &attr); err != nil {
+	cmd := exec.Command(prog, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
 		return -1, err
 	}
-	if s, err = proc.Wait(); err != nil {
-		return -1, err
-	}
-	return s.ExitCode(), err
+	return cmd.ProcessState.ExitCode(), nil
 }
 
 func clone(url, dir string) {
