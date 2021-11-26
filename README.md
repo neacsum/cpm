@@ -8,12 +8,12 @@ You have two libraries `cool_A` and `cool_B` that need to be used in an applicat
 You need to create a JSON file called `cpm.json` in each repository:
 
 In `super_App`:
-````
+````JSON
 { "name": "super_App", "git": "git@github.com:user/super_App.git",
   "depends": [
       {"name": "cool_A", "git": "git@github.com:user/cool_A.git"},
       {"name": "cool_B", "git": "git@github.com:user/cool_B.git"}
-  ]
+  ],
   "build" : [
       {"os": "windows", "command": "msbuild", "args": ["super_app.proj"]},
       {"os": "linux", "command": "cmake"}
@@ -21,11 +21,11 @@ In `super_App`:
 }
 ````
 In `cool_A`:
-````
+````JSON
 { "name": "cool_A", "git": "git@github.com:user/cool_A.git",
   "depends": [
       {"name": "utils", "git": "git@github.com:user/utils.git"},
-  ]
+  ],
   "build": [
       {"os": "windows", "command": "msbuild", "args": ["cool_a.proj"]},
       {"os": "linux", "command": "cmake"}
@@ -34,11 +34,11 @@ In `cool_A`:
 ````
 
 In `cool_B`:
-````
+````JSON
 { "name": "cool_B", "git": "git@github.com:user/cool_B.git",
   "depends": [
       {"name": "utils", "git": "git@github.com:user/utils.git"},
-  ]
+  ],
   "build": [
       {"os": "windows", "command": "msbuild", "args": ["cool_b.proj"]},
       {"os": "linux", "command": "cmake"}
@@ -47,7 +47,7 @@ In `cool_B`:
 ````
 
 In `utils`:
-````
+````JSON
 { "name": "utils", "git": "git@github.com:user/utils.git",
   "build": [
       {"os": "windows", "command": "msbuild", "args": ["utils.proj"]},
@@ -192,18 +192,18 @@ Valid options are:
   - `-v` verbose
 
 ## Semantics of CPM.JSON file ##
-|Level | Attribute | Value | Semantics |
-|------|-----------|-------|-----------|
-| 1    | name      | string | Name of package |
-| 1    | git       | string | Download location for the package |
-| 1    | build     | array  | Commands to be issued for building the package. |
-| 2    | os        | string | OS to which the build command applies |
-| 2    | command   | string | Command issued for building the package |
-| 2    | args      | array  | Command arguments |
-| 1    | depends   | array  | Package dependencies |
-| 2    | name      | string | Name of dependency |
-| 2    | git       | string | Download location for dependency |
-| 2    | fetchOnly | bool   | Weak dependency (see below) |
+|Level | Attribute   | Value  | Semantics |
+|------|-------------|--------|-----------|
+| 1    | `name`      | string | Name of package |
+| 1    | `git`       | string | Download location for the package |
+| 1    | `build`     | array  | Commands to be issued for building the package. |
+| 2    | `os`        | string | OS to which the build command applies |
+| 2    | `command`   | string | Command issued for building the package |
+| 2    | `args`      | array  | Command arguments |
+| 1    | `depends`   | array  | Package dependencies |
+| 2    | `name`      | string | Name of dependency |
+| 2    | `git`       | string | Download location for dependency |
+| 2    | `fetchOnly` | bool   | Weak dependency (see below) |
 
 ## Weak Dependencies ##
 Sometimes it may happen that two modules are interdependent. For instance `cool_A` needs a type definition that is provided by `cool_B`. Symbolic links can take care of this situation like shown below:
