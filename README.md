@@ -189,6 +189,7 @@ If project is not specified, it is assumed to be the current directory.
 
 Valid options are:
   - `-f` fetch-only (no build)
+  - `-l` local-only (no pull)
   - `-v` verbose
 
 ## Semantics of CPM.JSON file ##

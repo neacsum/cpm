@@ -10,11 +10,12 @@ package main
 	Usage:
 		cpm [options] [<project>]
 
-	If project neame is missing, the program assumes to be the current
+	If project name is missing, the program assumes to be the current
 	directory.
 
 	Valid options are:
 		-f fetch-only (do not build)
+		-l local-only (do not pull)
 		-v verbose
 
 	The program opens the '${DEV_ROOT}/<project>/cpm.json' file and
@@ -32,6 +33,8 @@ import (
 	"os/exec"
 	"runtime"
 )
+
+const Version = "V0.2.0"
 
 type BuildCommands struct {
 	Os   string
@@ -63,13 +66,15 @@ var all_packs []*PacUnit
 var inprocess []string
 
 //command line flags
-var fetch_flag, verbose_flag *bool
+var fetch_flag, local_flag, verbose_flag *bool
 
 func main() {
 	var err error
 	fetch_flag = flag.Bool("f", false, "fetch only (no build)")
+	local_flag = flag.Bool("l", false, "local only (no pull)")
 	verbose_flag = flag.Bool("v", false, "verbose")
 
+	println("C/C++ Package Manager " + Version)
 	if devroot = os.Getenv("DEV_ROOT"); len(devroot) == 0 {
 		log.Fatal("Environment variable  DEV_ROOT not set")
 	}
@@ -78,12 +83,12 @@ func main() {
 		devroot += "/"
 	}
 	flag.Usage = func() {
-		println(`C/C++ Package Manager
-  Usage: cpm [options] [project]
+		println(`Usage: cpm [options] [project]
 				
   If project is not specified, it is assumed to be the current directory.
   Valid options are:
     -f fetch-only (no build)
+    -l local-only (no pull)
     -v verbose
     -h help - prints this message`)
 	}
@@ -130,6 +135,9 @@ func fetch(p *PacUnit) {
 	pacdir := devroot + p.Name
 
 	if _, err := os.Stat(pacdir); os.IsNotExist(err) {
+		if *local_flag {
+			log.Fatalf("Fatal - local-only mode and %s does not exist", p.Name)
+		}
 		if err := os.Mkdir(pacdir, 0666); err != nil {
 			log.Fatalf("error %d - cannot create folder %s", err, pacdir)
 		}
@@ -137,11 +145,13 @@ func fetch(p *PacUnit) {
 		os.Chdir(pacdir)
 	} else {
 		os.Chdir(pacdir)
-		pull(p.Git)
+		if !*local_flag {
+			pull(p.Git)
+		}
 	}
 
 	cwd, _ := os.Getwd()
-	Verbosef("Setting up %s in %s \n", p.Name, cwd)
+	Verbosef("Setting up %s in %s\n", p.Name, cwd)
 
 	os.Symlink(devroot+"lib", "lib")
 
