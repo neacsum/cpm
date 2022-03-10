@@ -188,6 +188,7 @@ cpm [options] [project]
 If project is not specified, it is assumed to be the current directory.
 
 Valid options are:
+  - `-b <branch_name>` switches to a specific branch
   - `-f` fetch-only (no build)
   - `-l` local-only (no pull)
   - `-v` verbose
@@ -242,4 +243,4 @@ DevTreeRoot
                      |
                      +-- hdr2.h
 ````
-In situations like that, CPM has to fetch the packages and create the symbolic links but should not initiate the build process of `cool_B` as part of the build process for `cool_A`. These situations are called *weak dependencies* and are flagged by the `fetchOnly` flag in the CPM.JSON file.
+In such cases, CPM has to fetch the packages and create the symbolic links but should not initiate the build process of `cool_B` as part of the build process for `cool_A`. These situations are called *weak dependencies* and are flagged by the `fetchOnly` flag in the CPM.JSON file.
