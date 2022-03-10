@@ -14,6 +14,7 @@ package main
 	directory.
 
 	Valid options are:
+	    -b <branch name> switches to specific branch
 		-f fetch-only (do not build)
 		-l local-only (do not pull)
 		-v verbose
@@ -34,7 +35,7 @@ import (
 	"runtime"
 )
 
-const Version = "V0.2.0"
+const Version = "V0.3.0"
 
 type BuildCommands struct {
 	Os   string
@@ -67,12 +68,14 @@ var inprocess []string
 
 //command line flags
 var fetch_flag, local_flag, verbose_flag *bool
+var branch_flag *string
 
 func main() {
 	var err error
 	fetch_flag = flag.Bool("f", false, "fetch only (no build)")
 	local_flag = flag.Bool("l", false, "local only (no pull)")
 	verbose_flag = flag.Bool("v", false, "verbose")
+	branch_flag = flag.String("b", "", "select branch")
 
 	println("C/C++ Package Manager " + Version)
 	if devroot = os.Getenv("DEV_ROOT"); len(devroot) == 0 {
@@ -87,6 +90,7 @@ func main() {
 				
   If project is not specified, it is assumed to be the current directory.
   Valid options are:
+    -b <branch name> checkout specific branch
     -f fetch-only (no build)
     -l local-only (no pull)
     -v verbose
@@ -141,13 +145,16 @@ func fetch(p *PacUnit) {
 		if err := os.Mkdir(pacdir, 0666); err != nil {
 			log.Fatalf("error %d - cannot create folder %s", err, pacdir)
 		}
-		clone(p.Git, p.Name)
+		git_clone(p.Git, p.Name)
 		os.Chdir(pacdir)
 	} else {
 		os.Chdir(pacdir)
 		if !*local_flag {
-			pull(p.Git)
+			git_pull(p.Git)
 		}
+	}
+	if *branch_flag != "" {
+		git_switch(*branch_flag)
 	}
 
 	cwd, _ := os.Getwd()
@@ -278,7 +285,7 @@ func Run(prog string, args []string) (int, error) {
 	return cmd.ProcessState.ExitCode(), nil
 }
 
-func clone(url, dir string) {
+func git_clone(url, dir string) {
 	fullpath := devroot + dir
 
 	Verbosef("Cloning: %s in %s\n", url, dir)
@@ -288,11 +295,19 @@ func clone(url, dir string) {
 	}
 }
 
-func pull(url string) {
+func git_pull(url string) {
 	Verbosef("Pulling: %s\n", url)
 
 	if stat, err := Run("git", []string{"pull", url}); err != nil || stat != 0 {
 		log.Fatalf("Pulling failed \nStatus %d Error: %v\n", stat, err)
+	}
+}
+
+func git_switch(branch string) {
+	Verbosef("Switching to: %s\n", branch)
+
+	if stat, err := Run("git", []string{"switch", branch}); err != nil || stat != 0 {
+		log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", branch, stat, err)
 	}
 }
 
