@@ -35,7 +35,7 @@ import (
 	"runtime"
 )
 
-const Version = "V0.3.0"
+const Version = "V0.3.1"
 
 type BuildCommands struct {
 	Os   string
@@ -150,11 +150,8 @@ func fetch(p *PacUnit) {
 	} else {
 		os.Chdir(pacdir)
 		if !*local_flag {
-			git_pull(p.Git)
+			git_pull(*branch_flag)
 		}
-	}
-	if *branch_flag != "" {
-		git_switch(*branch_flag)
 	}
 
 	cwd, _ := os.Getwd()
@@ -289,31 +286,35 @@ func git_clone(url, dir string) {
 	fullpath := devroot + dir
 
 	Verbosef("Cloning: %s in %s\n", url, dir)
-
-	if stat, err := Run("git", []string{"clone", url, fullpath}); err != nil || stat != 0 {
+	var args []string
+	args = append(args, "clone")
+	if *branch_flag != "" {
+		args = append(args, "-b", *branch_flag)
+	}
+	args = append(args, url, fullpath)
+	Verboseln("Command git ", args)
+	if stat, err := Run("git", args); err != nil || stat != 0 {
 		log.Fatalf("Cloning failed \nStatus %d Error: %v\n", stat, err)
 	}
 }
 
-func git_pull(url string) {
-	Verbosef("Pulling: %s\n", url)
+func git_pull(branch string) {
+	Verboseln("Pulling")
 
-	if stat, err := Run("git", []string{"pull", url}); err != nil || stat != 0 {
+	if stat, err := Run("git", []string{"pull"}); err != nil || stat != 0 {
 		log.Fatalf("Pulling failed \nStatus %d Error: %v\n", stat, err)
 	}
-}
-
-func git_switch(branch string) {
-	Verbosef("Switching to: %s\n", branch)
-
-	if stat, err := Run("git", []string{"switch", branch}); err != nil || stat != 0 {
-		log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", branch, stat, err)
+	if branch != "" {
+		Verbosef("Switching to: %s\n", branch)
+		if stat, err := Run("git", []string{"switch", "-f", branch}); err != nil || stat != 0 {
+			log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", branch, stat, err)
+		}
 	}
 }
 
-func Verboseln(s string) {
+func Verboseln(s ...interface{}) {
 	if *verbose_flag {
-		fmt.Println(s)
+		fmt.Println(s...)
 	}
 }
 
