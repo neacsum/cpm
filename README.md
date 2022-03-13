@@ -181,7 +181,6 @@ go build cpm.go
 ````
 
 ## CPM Usage ##
-
 ````
 cpm [options] [project]
 ````
@@ -191,6 +190,7 @@ Valid options are:
   - `-b <branch_name>` switches to a specific branch
   - `-f` fetch-only (no build)
   - `-l` local-only (no pull)
+  - `-r <folder>` set root of development tree overriding `DEV_ROOT` environment variable
   - `-v` verbose
 
 ## Semantics of CPM.JSON file ##

@@ -33,6 +33,8 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
+	"time"
 )
 
 const Version = "V0.3.1"
@@ -67,24 +69,17 @@ var all_packs []*PacUnit
 var inprocess []string
 
 //command line flags
-var fetch_flag, local_flag, verbose_flag *bool
-var branch_flag *string
+var fetch_flag = flag.Bool("f", false, "fetch only (no build)")
+var local_flag = flag.Bool("l", false, "local only (no pull)")
+var verbose_flag = flag.Bool("v", false, "verbose")
+var branch_flag = flag.String("b", "", "select branch")
+var root_flag = flag.String("r", "", "set develpment tree root")
 
 func main() {
 	var err error
-	fetch_flag = flag.Bool("f", false, "fetch only (no build)")
-	local_flag = flag.Bool("l", false, "local only (no pull)")
-	verbose_flag = flag.Bool("v", false, "verbose")
-	branch_flag = flag.String("b", "", "select branch")
 
 	println("C/C++ Package Manager " + Version)
-	if devroot = os.Getenv("DEV_ROOT"); len(devroot) == 0 {
-		log.Fatal("Environment variable  DEV_ROOT not set")
-	}
-	//make sure DEV_ROOT is terminated with a path separator
-	if devroot[len(devroot)-1] != '/' && devroot[len(devroot)-1] != '\\' {
-		devroot += "/"
-	}
+	start := time.Now()
 	flag.Usage = func() {
 		println(`Usage: cpm [options] [project]
 				
@@ -93,20 +88,37 @@ func main() {
     -b <branch name> checkout specific branch
     -f fetch-only (no build)
     -l local-only (no pull)
+	-r <folder> set root of development tree
     -v verbose
     -h help - prints this message`)
 	}
 
 	flag.Parse()
 
+	if *root_flag != "" {
+		devroot = *root_flag
+	} else if devroot = os.Getenv("DEV_ROOT"); len(devroot) == 0 {
+		log.Fatal("No development tree root specified and environment variable  DEV_ROOT is not set")
+	}
+
+	//make sure DEV_ROOT is terminated with a path separator
+	if devroot[len(devroot)-1] != '/' && devroot[len(devroot)-1] != '\\' {
+		devroot += "/"
+	}
+
 	if flag.NArg() > 0 {
-		root_descriptor = devroot + flag.Arg(0) + "/" + descriptor_name
+		//root project specified on command line
+		if !strings.ContainsAny(flag.Arg(0), "\\/") {
+			root_descriptor = devroot
+		}
+		root_descriptor += flag.Arg(0) + "/" + descriptor_name
 	} else {
+		//assume root project is in current folder
 		cwd, _ := os.Getwd()
 		root_descriptor = cwd + "/" + descriptor_name
 	}
 
-	Verboseln("DEV_ROOT = " + devroot)
+	Verboseln("DEV_ROOT = ", devroot)
 	os.Mkdir(devroot+"lib", 0755)
 
 	root := new(PacUnit)
@@ -124,7 +136,7 @@ func main() {
 	os.Chdir(devroot + root.Name)
 
 	cwd, _ := os.Getwd()
-	Verboseln("Changed directory to " + cwd)
+	Verboseln("Changed directory to ", cwd)
 
 	fetch(root)
 
@@ -132,6 +144,8 @@ func main() {
 		inprocess = make([]string, 0, 10)
 		build(root)
 	}
+
+	fmt.Println("CPM operation finished in", time.Since(start).Round(100*time.Microsecond))
 }
 
 // Fetch a package and all its dependents
@@ -212,7 +226,7 @@ func fetch(p *PacUnit) {
 //Build a packge after having built first its dependents
 func build(p *PacUnit) {
 	if p.built {
-		Verboseln("Package " + p.Name + " has already been built")
+		Verboseln("Package ", p.Name, " has already been built")
 		return
 	}
 	for _, w := range inprocess {
@@ -292,32 +306,39 @@ func git_clone(url, dir string) {
 		args = append(args, "-b", *branch_flag)
 	}
 	args = append(args, url, fullpath)
-	Verboseln("Command git ", args)
+	Verboseln("git ", args)
 	if stat, err := Run("git", args); err != nil || stat != 0 {
 		log.Fatalf("Cloning failed \nStatus %d Error: %v\n", stat, err)
 	}
 }
 
+// Pull latest version from repo.
+// If branch is not empty, stwitches to that branch
 func git_pull(branch string) {
-	Verboseln("Pulling")
+	var args []string
+	args = append(args, "pull", "origin")
+	args = append(args, branch)
+	Verboseln("git ", args)
 
-	if stat, err := Run("git", []string{"pull"}); err != nil || stat != 0 {
+	if stat, err := Run("git", args); err != nil || stat != 0 {
 		log.Fatalf("Pulling failed \nStatus %d Error: %v\n", stat, err)
 	}
-	if branch != "" {
+	if len(branch) != 0 {
 		Verbosef("Switching to: %s\n", branch)
-		if stat, err := Run("git", []string{"switch", "-f", branch}); err != nil || stat != 0 {
+		if stat, err := Run("git", []string{"switch", branch}); err != nil || stat != 0 {
 			log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", branch, stat, err)
 		}
 	}
 }
 
+// If verbose flag is st, print arguments using Println
 func Verboseln(s ...interface{}) {
 	if *verbose_flag {
 		fmt.Println(s...)
 	}
 }
 
+// If verbose flag is set, print arguments using Printf
 func Verbosef(f string, a ...interface{}) {
 	if *verbose_flag {
 		fmt.Printf(f, a...)
