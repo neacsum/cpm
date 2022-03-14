@@ -184,13 +184,19 @@ go build cpm.go
 ````
 cpm [options] [project]
 ````
+or
+````
+cpm version
+````
+
 If project is not specified, it is assumed to be the current directory.
 
 Valid options are:
   - `-b <branch_name>` switches to a specific branch
+  - `-F` discards local changes when switching branches (issues a `git switch -f ...` command)
   - `-f` fetch-only (no build)
   - `-l` local-only (no pull)
-  - `-r <folder>` set root of development tree overriding `DEV_ROOT` environment variable
+  - `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
   - `-v` verbose
 
 ## Semantics of CPM.JSON file ##
@@ -206,6 +212,11 @@ Valid options are:
 | 2    | `name`      | string | Name of dependency |
 | 2    | `git`       | string | Download location for dependency |
 | 2    | `fetchOnly` | bool   | Weak dependency (see below) |
+
+## Operation ##
+CPM reads the CPM.JSON file in the selected folder and, for each dependent package, it checks if the project folder exists. If not, it issues a `git clone` command to bring the latest version. If you have selected a specific branch, CPM issues a `git switch ...` command to switch to that branch and then a `git pull ...` command to bring in the latest version of that branch.
+
+The next step is to build build each package by issuing the build commands appropriate for the OS environment. All commands that have an `os` attribute matching the current OS or without any `os` attribute are issued in order.
 
 ## Weak Dependencies ##
 Sometimes it may happen that two modules are interdependent. For instance `cool_A` needs a type definition that is provided by `cool_B`. Symbolic links can take care of this situation like shown below:

@@ -9,12 +9,15 @@ package main
 
 	Usage:
 		cpm [options] [<project>]
+	  or
+	    cpm version
 
 	If project name is missing, the program assumes to be the current
 	directory.
 
 	Valid options are:
 	    -b <branch name> switches to specific branch
+		-F discards local changes when switching branches
 		-f fetch-only (do not build)
 		-l local-only (do not pull)
 		-v verbose
@@ -37,7 +40,7 @@ import (
 	"time"
 )
 
-const Version = "V0.3.1"
+const Version = "V0.3.2"
 
 type BuildCommands struct {
 	Os   string
@@ -69,6 +72,7 @@ var all_packs []*PacUnit
 var inprocess []string
 
 //command line flags
+var force_flag = flag.Bool("F", false, "discard local changes")
 var fetch_flag = flag.Bool("f", false, "fetch only (no build)")
 var local_flag = flag.Bool("l", false, "local only (no pull)")
 var verbose_flag = flag.Bool("v", false, "verbose")
@@ -94,6 +98,9 @@ func main() {
 	}
 
 	flag.Parse()
+	if flag.NFlag() == 0 && flag.NArg() > 0 && flag.Arg(0) == "version" {
+		os.Exit(0)
+	}
 
 	if *root_flag != "" {
 		devroot = *root_flag
@@ -118,7 +125,7 @@ func main() {
 		root_descriptor = cwd + "/" + descriptor_name
 	}
 
-	Verboseln("DEV_ROOT = ", devroot)
+	Verboseln("DEV_ROOT=", devroot)
 	os.Mkdir(devroot+"lib", 0755)
 
 	root := new(PacUnit)
@@ -136,7 +143,7 @@ func main() {
 	os.Chdir(devroot + root.Name)
 
 	cwd, _ := os.Getwd()
-	Verboseln("Changed directory to ", cwd)
+	Verboseln("Changed directory to", cwd)
 
 	fetch(root)
 
@@ -164,7 +171,7 @@ func fetch(p *PacUnit) {
 	} else {
 		os.Chdir(pacdir)
 		if !*local_flag {
-			git_pull(*branch_flag)
+			git_pull(pacdir)
 		}
 	}
 
@@ -226,7 +233,7 @@ func fetch(p *PacUnit) {
 //Build a packge after having built first its dependents
 func build(p *PacUnit) {
 	if p.built {
-		Verboseln("Package ", p.Name, " has already been built")
+		Verboseln("Package", p.Name, "has already been built")
 		return
 	}
 	for _, w := range inprocess {
@@ -268,21 +275,23 @@ func build(p *PacUnit) {
 	command for the current OS envirnoment, use that one. Otherwise choose a
 	generic one (os set to "any" or "")
 */
-func do_build(b []BuildCommands) (int, error) {
-	for _, cfg := range b {
-		if cfg.Os == runtime.GOOS {
-			Verbosef("OS: %s cmd: %s % v\n", cfg.Os, cfg.Cmd, cfg.Args)
-			return Run(cfg.Cmd, cfg.Args)
+func do_build(commands []BuildCommands) (int, error) {
+	var ret int
+	var err error
+
+	if len(commands) == 0 {
+		Verboseln("No build command found!")
+		return 0, nil
+	}
+	for _, c := range commands {
+		if len(c.Os) == 0 || c.Os == "any" || (len(c.Os) > 0 && c.Os == runtime.GOOS) {
+			Verbosef("OS: %s cmd: %s %v\n", c.Os, c.Cmd, c.Args)
+			if ret, err = Run(c.Cmd, c.Args); ret != 0 {
+				return ret, err
+			}
 		}
 	}
-	for _, cfg := range b {
-		if cfg.Os == "any" || cfg.Os == "" {
-			Verbosef("cmd: %s % v\n", cfg.Cmd, cfg.Args)
-			return Run(cfg.Cmd, cfg.Args)
-		}
-	}
-	Verboseln("No build command found!")
-	return 0, nil
+	return ret, err
 }
 
 func Run(prog string, args []string) (int, error) {
@@ -314,24 +323,31 @@ func git_clone(url, dir string) {
 
 // Pull latest version from repo.
 // If branch is not empty, stwitches to that branch
-func git_pull(branch string) {
+func git_pull(dir string) {
 	var args []string
-	args = append(args, "pull", "origin")
-	args = append(args, branch)
-	Verboseln("git ", args)
 
+	if len(*branch_flag) != 0 {
+		Verbosef("In %s - Switching to: %s\n", dir, *branch_flag)
+		args = append(args, "switch")
+		if *force_flag {
+			args = append(args, "-f")
+		}
+		args = append(args, *branch_flag)
+		Verboseln("In", dir, "- git", args)
+		if stat, err := Run("git", args); err != nil || stat != 0 {
+			log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", *branch_flag, stat, err)
+		}
+	}
+	args = nil
+	args = append(args, "pull", "origin")
+	args = append(args, *branch_flag)
+	Verboseln("In", dir, "- git ", args)
 	if stat, err := Run("git", args); err != nil || stat != 0 {
 		log.Fatalf("Pulling failed \nStatus %d Error: %v\n", stat, err)
 	}
-	if len(branch) != 0 {
-		Verbosef("Switching to: %s\n", branch)
-		if stat, err := Run("git", []string{"switch", branch}); err != nil || stat != 0 {
-			log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", branch, stat, err)
-		}
-	}
 }
 
-// If verbose flag is st, print arguments using Println
+// If verbose flag is set, print arguments using default format followed by newline
 func Verboseln(s ...interface{}) {
 	if *verbose_flag {
 		fmt.Println(s...)
