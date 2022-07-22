@@ -1,6 +1,6 @@
 # CPM - A C/C++ Package Manager
 
-CPM is a tool that helps coordinate work between multiple repositories. You need just a simple JSON file to describe dependencies between repositories. This together with the magic of symbolic links helps you maintain a consistent environment for multiple libraries.
+CPM is a tool that helps coordinate work between multiple repositories. You need just a simple JSON file to describe dependencies between repositories. This, together with the magic of symbolic links helps you maintain a consistent environment for multiple libraries.
 
 ## Example ##
 You have two libraries `cool_A` and `cool_B` that need to be used in an application `super_App`. Both `cool_A` and `cool_B` use code from another library `utils`. Each one for these has its own Git repository.
@@ -211,6 +211,7 @@ Valid options are:
 | 1    | `depends`   | array  | Package dependencies |
 | 2    | `name`      | string | Name of dependency |
 | 2    | `git`       | string | Download location for dependency |
+| 2    | `module`    | string | Module name for packages with multiple modules |
 | 2    | `fetchOnly` | bool   | Weak dependency (see below) |
 
 ## Operation ##

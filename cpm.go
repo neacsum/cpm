@@ -40,7 +40,7 @@ import (
 	"time"
 )
 
-const Version = "V0.3.2"
+const Version = "V0.4.0"
 
 type BuildCommands struct {
 	Os   string
@@ -51,6 +51,7 @@ type BuildCommands struct {
 type DependencyDescriptor struct {
 	Name      string
 	Git       string
+	Module    string
 	FetchOnly bool
 	pack      *PacUnit
 }
@@ -224,8 +225,16 @@ func fetch(p *PacUnit) {
 
 		//create symlinks to dependents
 		for _, dep := range p.Depends {
-			Verbosef("In %s creating symlink %sinclude/%[3]s --> %[3]s\n", cwd, devroot, dep.Name)
-			os.Symlink(devroot+dep.Name+"/include/"+dep.Name, dep.Name)
+			var target string
+			if len(dep.Module) != 0 {
+				target = devroot + dep.Name + "/include/" + dep.Module
+				Verbosef("In %s creating symlink %s --> %s\n", cwd, target, dep.Module)
+				os.Symlink(target, dep.Module)
+			} else {
+				target = devroot + dep.Name + "/include/" + dep.Name
+				Verbosef("In %s creating symlink %s --> %[3]s\n", cwd, target, dep.Name)
+				os.Symlink(target, dep.Name)
+			}
 		}
 	}
 }
