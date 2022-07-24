@@ -1,15 +1,26 @@
-# CPM - A C/C++ Package Manager
+<h1> CPM - A C/C++ Package Manager </h1>
 
-CPM is a tool that helps coordinate work between multiple repositories. You need just a simple JSON file to describe dependencies between repositories. This, together with the magic of symbolic links helps you maintain a consistent environment for multiple libraries.
+- [1. A Basic Example](#1-a-basic-example)
+- [2. Code Layout Rules](#2-code-layout-rules)
+  - [2.1. Multi-module library packages](#21-multi-module-library-packages)
+  - [2.2. Weak Dependencies](#22-weak-dependencies)
+  - [2.3. Compatibility with other code layout schemes](#23-compatibility-with-other-code-layout-schemes)
+- [3. Installation](#3-installation)
+- [4. Usage](#4-usage)
+- [5. Semantics of CPM.JSON file](#5-semantics-of-cpmjson-file)
+- [6. Operation](#6-operation)
+- [7. Proving Ground](#7-proving-ground)
+     
+CPM is a tool that helps coordinate work between multiple repositories. All you need is a simple JSON file to describe dependencies between repositories. This, together with the magic of symbolic links helps maintain a consistent environment for multiple libraries.
 
-## Example ##
-You have two libraries `cool_A` and `cool_B` that need to be used in an application `super_App`. Both `cool_A` and `cool_B` use code from another library `utils`. Each one for these has its own Git repository.
+## 1. A Basic Example ##
+You have two libraries `cool_A` and `cool_B` that need to be used in an application `super_app`. Both `cool_A` and `cool_B` use code from another library `utils`. Each one for these has its own Git repository.
 
 You need to create a JSON file called `cpm.json` in each repository:
 
-In `super_App`:
+In `super_app`:
 ````JSON
-{ "name": "super_App", "git": "git@github.com:user/super_App.git",
+{ "name": "super_app", "git": "git@github.com:user/super_App.git",
   "depends": [
       {"name": "cool_A", "git": "git@github.com:user/cool_A.git"},
       {"name": "cool_B", "git": "git@github.com:user/cool_B.git"}
@@ -56,13 +67,13 @@ In `utils`:
 }
 ````
 
-After that, you just have to fetch the `super_App` repository and invoke the CPM utility:
+After that, you just have to fetch the `super_app` repository and invoke the CPM utility:
 ````
 cpm super_app
 ````
 It will take care of pulling all the other repositories and issuing the build commands for the current operating system.
 
-## Basic rules ##
+## 2. Code Layout Rules ##
 To be able to use this magic you have to adhere to a set of basic rules:
 > **RULE 1** - All projects have their own folder and all project folders are in one parent folder. The environment variable `DEV_ROOT` points to this root of development tree.
 
@@ -103,9 +114,10 @@ DevTreeRoot
         |
         +-- project file (cool_B.vcxproj) and other stuff
 ````
+
 > **RULE 2** - Include files that need to be visible to users are placed in a subfolder of the `include` folder. The subfolder has the same name as the library.
 
-If users of `cool_A` can refer to `hdr1.h` file like this:
+Users of `cool_A` can refer to `hdr1.h` file like this:
 ````C
 #include <cool_A/hdr1.h>
 ````
@@ -114,6 +126,8 @@ An additional advantage of this organization is that it prevents name clashes be
 #include <cool_A/hdr1.h>
 #include <cool_B/hdr1.h>
 ````
+<u>**Note:**</u> There is an enhancement to this rule: if the library package contains separate groups of files, they can be grouped together in *modules*. See below about multi-module libraries. Usually however, a library package has only one module.
+
 
 > **RULE 3** - Include folders of dependent modules are made visible through symbolic links
 
@@ -144,7 +158,7 @@ DevTreeRoot
   |      other files
   ...
 ````
-> **RULE 4** - All libraries reside in a `lib` folder at the root of development tree. Each module contains a _symbolic link_ to this folder.
+> **RULE 4** - All binary library packages reside in a `lib` folder at the root of development tree. Each package contains a _symbolic link_ to this folder.
 
 Without repeating the parts already shown of the files layout, here is the part related to `lib` folder (again, angle brackets denote symbolic links):
 ````
@@ -174,52 +188,35 @@ DevTreeRoot
 ````
 If there are different flavors of link libraries (debug, release, 32-bit, 64-bit) they can be accommodated as subfolders of the `lib` folder.
 
-## CPM Installation ##
-CPM is written in Go. You can download a prebuilt version or you can build it from source. To build it, you need to have the Go compiler [installed](https://go.dev/doc/install). Use the following command to build the executable:
+### 2.1. Multi-module library packages ###
+Sometimes a library may contain more than one group of files. For instance a communication library may contain a group of functions for serial communication, another for Bluetooth communication and so on. We call these groups of files *modules*. In this case, the header files can be divided in different folders, one for each module in the library:
 ````
-go build cpm.go
+DevTreeRoot
+|
++-- multi_mod_lib
+|        |
+|        +-- include
+|               |
+|               +-- module_A
+|               |     |
+|               |     +-- hdr_a.h
+|               |
+|               +-- module_B
+|                     |
+|                     +-- hdr_b.h
+...
+```` 
+A dependent package that wants to include only one module of the library must use the `module` attribute in the dependency descriptor.
+
+Example:
+````JSON
+  "depends": [
+      {"name": "multi_mod_lib", "module": "module_A", "git": "git@github.com:user/mml.git"}]
 ````
 
-## CPM Usage ##
-````
-cpm [options] [project]
-````
-or
-````
-cpm version
-````
+Note that a library package with multiple modules still has only one binary `.lib` (or `.a`) file.
 
-If project is not specified, it is assumed to be the current directory.
-
-Valid options are:
-  - `-b <branch_name>` switches to a specific branch
-  - `-F` discards local changes when switching branches (issues a `git switch -f ...` command)
-  - `-f` fetch-only (no build)
-  - `-l` local-only (no pull)
-  - `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
-  - `-v` verbose
-
-## Semantics of CPM.JSON file ##
-|Level | Attribute   | Value  | Semantics |
-|------|-------------|--------|-----------|
-| 1    | `name`      | string | Name of package |
-| 1    | `git`       | string | Download location for the package |
-| 1    | `build`     | array  | Commands to be issued for building the package. |
-| 2    | `os`        | string | OS to which the build command applies |
-| 2    | `command`   | string | Command issued for building the package |
-| 2    | `args`      | array  | Command arguments |
-| 1    | `depends`   | array  | Package dependencies |
-| 2    | `name`      | string | Name of dependency |
-| 2    | `git`       | string | Download location for dependency |
-| 2    | `module`    | string | Module name for packages with multiple modules |
-| 2    | `fetchOnly` | bool   | Weak dependency (see below) |
-
-## Operation ##
-CPM reads the CPM.JSON file in the selected folder and, for each dependent package, it checks if the project folder exists. If not, it issues a `git clone` command to bring the latest version. If you have selected a specific branch, CPM issues a `git switch ...` command to switch to that branch and then a `git pull ...` command to bring in the latest version of that branch.
-
-The next step is to build build each package by issuing the build commands appropriate for the OS environment. All commands that have an `os` attribute matching the current OS or without any `os` attribute are issued in order.
-
-## Weak Dependencies ##
+### 2.2. Weak Dependencies ###
 Sometimes it may happen that two modules are interdependent. For instance `cool_A` needs a type definition that is provided by `cool_B`. Symbolic links can take care of this situation like shown below:
 ````
 DevTreeRoot
@@ -256,3 +253,78 @@ DevTreeRoot
                      +-- hdr2.h
 ````
 In such cases, CPM has to fetch the packages and create the symbolic links but should not initiate the build process of `cool_B` as part of the build process for `cool_A`. These situations are called *weak dependencies* and are flagged by the `fetchOnly` flag in the CPM.JSON file.
+
+### 2.3. Compatibility with other code layout schemes ###
+The layout required by CPM is simple and so, very compatible with other layout recommendations. My personal favorite is [The Pitchfork Layout](https://api.csswg.org/bikeshed/?force=1&url=https://raw.githubusercontent.com/vector-of-bool/pitchfork/spec/data/spec.bs). Note however the following differences:
+- PFL does not describe any mechanism for cooperation between different packages. The symbolic links mechanism described in this document is specific to CPM.
+- PFL does not use a shared `lib/` directory. The PFL `libs/` folder is used for a different purpose.
+
+## 3. Installation ##
+CPM is written in Go. You can download a prebuilt version for [Windows](https://github.com/neacsum/cpm/releases/latest/download/cpm.exe) or [Ubuntu](https://github.com/neacsum/cpm/releases/latest/download/cpm). Alternatively, you can build it from source. To build it, you need to have the Go compiler [installed](https://go.dev/doc/install). Use the following command to build the executable:
+````
+go build cpm.go
+````
+There are no other dependencies and you just have to place the CPM executable somewhere on the path.
+
+## 4. Usage ##
+````
+cpm [options] [project]
+````
+or
+````
+cpm version
+````
+
+If `project` is not specified, it is assumed to be in the current directory.
+
+Valid options are:
+  - `-b <branch_name>` switches to a specific branch
+  - `-F` discards local changes when switching branches (issues a `git switch -f ...` command)
+  - `-f` fetch-only (no build)
+  - `-l` local-only (no pull)
+  - `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
+  - `-v` verbose
+
+## 5. Semantics of CPM.JSON file ##
+|Level | Attribute   | Value  | Semantics |
+|------|-------------|--------|-----------|
+| 1    | `name`      | string | Name of package |
+| 1    | `git`       | string | Download location for the package |
+| 1    | `build`     | array  | Commands to be issued for building the package. |
+| 2    | `os`        | string | OS to which the build command applies |
+| 2    | `command`   | string | Command issued for building the package |
+| 2    | `args`      | array  | Command arguments |
+| 1    | `depends`   | array  | Package dependencies |
+| 2    | `name`      | string | Name of dependency |
+| 2    | `git`       | string | Download location for dependency |
+| 2    | `module`    | string | Module name for packages with multiple modules |
+| 2    | `fetchOnly` | bool   | Weak dependency (see below) |
+
+## 6. Operation ##
+CPM reads the CPM.JSON file in the selected folder and, for each dependent package, it checks if the project folder exists. If not, it issues a `git clone` command to bring the latest version. If you have selected a specific branch, CPM issues a `git switch ...` command to switch to that branch and then a `git pull ...` command to bring in the latest version of that branch.
+
+The next step is to build build each package by issuing the build commands appropriate for the OS environment. All commands that have an `os` attribute matching the current OS or without any `os` attribute are issued in order.
+
+## 7. Proving Ground ##
+CPM can be tested using a [sample project](https://github.com/neacsum/example_super_app). To use it follow these steps:
+1. Make sure you have installed Visual Studio 2017 or higher (preferably VS2022).
+2. Download [CPM](https://github.com/neacsum/cpm/releases/latest/download/cpm.exe) program and place it somewhere in the path
+3. Create a `devroot` folder:
+````
+c:\temp>mkdir devroot
+c:\temp>set DEV_ROOT=c:temp\devroot
+c:\temp>cd devroot
+````
+4. Clone the sample project:  
+````
+c:\temp\devroot>git clone git@github.com:neacsum/example_super_app.git super_app
+````
+5. Run the CPM program:
+````
+c:\temp\devroot>cpm super_app
+````
+If all goes well, you should have a file `c:\temp\devroot\super_app\build\app\x64\Debug\super_app.exe`. Also the directory `c:\temp\devroot\lib\x64\Debug` should contain the files
+- `cool_A.lib`,
+- `cool_B.lib`
+- `multi_mod.lib`
+
