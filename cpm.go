@@ -35,12 +35,13 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 )
 
-const Version = "V0.4.0"
+const Version = "V0.4.1"
 
 type BuildCommands struct {
 	Os   string
@@ -108,6 +109,7 @@ func main() {
 	} else if devroot = os.Getenv("DEV_ROOT"); len(devroot) == 0 {
 		log.Fatal("No development tree root specified and environment variable  DEV_ROOT is not set")
 	}
+	devroot, _ = filepath.Abs(devroot)
 
 	//make sure DEV_ROOT is terminated with a path separator
 	if devroot[len(devroot)-1] != '/' && devroot[len(devroot)-1] != '\\' {
@@ -115,18 +117,20 @@ func main() {
 	}
 
 	if flag.NArg() > 0 {
+		dir := ""
 		//root project specified on command line
 		if !strings.ContainsAny(flag.Arg(0), "\\/") {
-			root_descriptor = devroot
+			dir = devroot
 		}
-		root_descriptor += flag.Arg(0) + "/" + descriptor_name
+		root_descriptor = filepath.Join(dir, flag.Arg(0), descriptor_name)
 	} else {
 		//assume root project is in current folder
 		cwd, _ := os.Getwd()
-		root_descriptor = cwd + "/" + descriptor_name
+		root_descriptor = filepath.Join(cwd, descriptor_name)
 	}
 
 	Verboseln("DEV_ROOT=", devroot)
+	Verboseln("Top descriptor is ", root_descriptor)
 	os.Mkdir(devroot+"lib", 0755)
 
 	root := new(PacUnit)
