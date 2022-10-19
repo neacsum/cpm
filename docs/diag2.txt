@@ -1,0 +1,28 @@
+DevTreeRoot
+   |
+   +-- SuperApp
+   |      |
+   |      +-- include
+   |      |     |
+   |      |     +-- <cool_A>
+   |      |     |      .
+   |      |     |      |
+   |      |     |      +-- hdr1.h
+   |      |     |      |
+   |      |     |      +-- hdr2.h
+   |      |     |
+   |      |     +-- <cool_B>
+   |      |     |      .
+   |      |     |      |
+   |      |     |      +-- hdr1.h
+   |      |     |      |
+   |      |     |      +-- hdr4.h
+   |      |     |
+   |      |     +- other header files
+   |      |
+   |      +-- src
+   |      |    |
+   |      |    +-- source files
+   |      |
+   |      +- other files
+   ...

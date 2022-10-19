@@ -1,0 +1,39 @@
+DevTreeRoot
+   |
+   +-- cool_A
+   |    .
+   |    |
+   |    +-- include
+   |    |      |
+   |    |      +-- cool_A
+   |    |            .
+   |    |            |
+   |    |            +-- hdr1.h
+   |    |            |
+   |    |            +-- hdr2.h
+   |    +-- src
+   |    |    |
+   |    |    +-- file1.cpp
+   |    |    |
+   |    |    +-- file2.cpp
+   |    |
+   |    +-- project file (cool_A.vcxproj) and other stuff
+   |
+   +-- cool_B
+        .
+        |
+        +-- include
+        |      |
+        |      +-- cool_B
+        |            .
+        |            |
+        |            +-- hdr1.h
+        |            |
+        |            +-- hdr4.h
+        +-- src
+        |    |
+        |    +-- file1.cpp
+        |    |
+        |    +-- file2.cpp
+        |
+        +-- project file (cool_B.vcxproj) and other stuff

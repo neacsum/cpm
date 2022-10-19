@@ -231,11 +231,11 @@ func fetch(p *PacUnit) {
 		for _, dep := range p.Depends {
 			var target string
 			if len(dep.Module) != 0 {
-				target = devroot + dep.Name + "/include/" + dep.Module
+				target = filepath.Join(devroot, dep.Name, "include", dep.Module)
 				Verbosef("In %s creating symlink %s --> %s\n", cwd, target, dep.Module)
 				os.Symlink(target, dep.Module)
 			} else {
-				target = devroot + dep.Name + "/include/" + dep.Name
+				target = filepath.Join(devroot, dep.Name, "include", dep.Name)
 				Verbosef("In %s creating symlink %s --> %[3]s\n", cwd, target, dep.Name)
 				os.Symlink(target, dep.Name)
 			}
@@ -243,7 +243,7 @@ func fetch(p *PacUnit) {
 	}
 }
 
-//Build a packge after having built first its dependents
+//Build a packge after first having built its dependents
 func build(p *PacUnit) {
 	if p.built {
 		Verboseln("Package", p.Name, "has already been built")

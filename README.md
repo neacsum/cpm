@@ -10,6 +10,7 @@
 - [5. Semantics of CPM.JSON file](#5-semantics-of-cpmjson-file)
 - [6. Operation](#6-operation)
 - [7. Proving Ground](#7-proving-ground)
+- [8. Integration with GitHub actions](#8-integration-with-github-actions)
      
 CPM is a tool that helps coordinate work between multiple repositories. All you need is a simple JSON file to describe dependencies between repositories. This, together with the magic of symbolic links helps maintain a consistent environment for multiple libraries.
 
@@ -77,43 +78,8 @@ It will take care of pulling all the other repositories and issuing the build co
 To be able to use this magic you have to adhere to a set of basic rules:
 > **RULE 1** - All projects have their own folder and all project folders are in one parent folder. The environment variable `DEV_ROOT` points to this root of development tree.
 
-Here is some ASCII art showing the general code layout:
-````
-DevTreeRoot
-   |
-   +-- cool_A
-   |    |
-   |    +-- include
-   |    |      |
-   |    |      +-- cool_A
-   |    |            |
-   |    |            +-- hdr1.h
-   |    |            |
-   |    |            +-- hdr2.h
-   |    +-- src
-   |    |    |
-   |    |    +-- file1.cpp
-   |    |    |
-   |    |    +-- file2.cpp
-   |    +-- project file (cool_A.vcxproj) and other stuff
-   |
-   +-- cool_B
-        |
-        +-- include
-        |      |
-        |      +-- cool_B
-        |            |
-        |            +-- hdr1.h
-        |            |
-        |            +-- hdr4.h
-        +-- src
-        |    |
-        |    +-- file1.cpp
-        |    |
-        |    +-- file2.cpp
-        |
-        +-- project file (cool_B.vcxproj) and other stuff
-````
+Here is a diagram showing the general code layout:
+![](docs/diag1.svg)
 
 > **RULE 2** - Include files that need to be visible to users are placed in a subfolder of the `include` folder. The subfolder has the same name as the library.
 
@@ -128,130 +94,54 @@ An additional advantage of this organization is that it prevents name clashes be
 ````
 <u>**Note:**</u> There is an enhancement to this rule: if the library package contains separate groups of files, they can be grouped together in *modules*. See below about multi-module libraries. Usually however, a library package has only one module.
 
-
 > **RULE 3** - Include folders of dependent modules are made visible through symbolic links
 
 In the structure shown before, the application that uses `cool_A` and `cool_B` will have an `include` folder but in this folder there are _symbolic links_ to `cool_A` and `cool_B` include folders. The folder structure will look something like this (angle brackets denote symbolic links):
-````
-DevTreeRoot
-  |
-  +-- SuperApp
-  |      |
-  |      +-- include
-  |      |     |
-  |      |     +-- <cool_A>
-  |      |     |      |
-  |      |     |      +-- hdr1.h
-  |      |     |      |
-  |      |     |      +-- hdr2.h
-  |      |     |
-  |      |     +-- <cool_B>
-  |      |     |      |
-  |      |     |      +-- hdr1.h
-  |      |     |      |
-  |      |     |      +-- hdr4.h
-  |      |     other header files
-  |      |
-  |      +-- src
-  |      |    |
-  |      |    +-- source files
-  |      other files
-  ...
-````
+
+![](docs/diag2.svg)
+
 > **RULE 4** - All binary library packages reside in a `lib` folder at the root of development tree. Each package contains a _symbolic link_ to this folder.
 
 Without repeating the parts already shown of the files layout, here is the part related to `lib` folder (again, angle brackets denote symbolic links):
-````
-DevTreeRoot
-  |
-  +-- cool_A
-  |     |
-  |    ...
-  |     +-- <lib>
-  |           |
-  |           all link libraries are here
-  +-- cool_B
-  |     |
-  |    ...
-  |     +-- <lib>
-  |           |
-  |           all link libraries are here
-  +-- SuperApp
-  |      |
-  |     ...
-  |      +-- <lib>
-  |            |
-  |            all link libraries are here
-  +-- lib
-       |
-       all link libraries are here
-````
+
+![](docs/diag3.svg)
+
 If there are different flavors of link libraries (debug, release, 32-bit, 64-bit) they can be accommodated as subfolders of the `lib` folder.
 
 ### 2.1. Multi-module library packages ###
-Sometimes a library may contain more than one group of files. For instance a communication library may contain a group of functions for serial communication, another for Bluetooth communication and so on. We call these groups of files *modules*. In this case, the header files can be divided in different folders, one for each module in the library:
-````
-DevTreeRoot
-|
-+-- multi_mod_lib
-|        |
-|        +-- include
-|               |
-|               +-- module_A
-|               |     |
-|               |     +-- hdr_a.h
-|               |
-|               +-- module_B
-|                     |
-|                     +-- hdr_b.h
-...
-```` 
-A dependent package that wants to include only one module of the library must use the `module` attribute in the dependency descriptor.
+Sometimes, a library may contain more than one group of files. For instance a communication library may contain a group of functions for serial communication, another for Bluetooth communication, and so on. We call these groups of files *modules*. In this case, the header files can be divided in different folders, one for each module in the library:
+
+![](docs/diag4.svg)
+
+ Inside the library, the headers can be referenced as:
+```C++
+#include <serial/stuff.h>
+#include <bluetooh/other_stuff.h>
+```
+If a dependent package wants to include only one module of the library, it can use the `module` attribute in the dependency descriptor.
 
 Example:
 ````JSON
   "depends": [
-      {"name": "multi_mod_lib", "module": "module_A", "git": "git@github.com:user/mml.git"}]
+      {"name": "libcom", "module": "serial", "git": "git@github.com:user/mml.git"}]
+````
+This will produce the following folder structure (again, angle brackets denote symbolic links):  
+![](docs/diag4_1.svg)
+
+It is OK to refer more than one module:
+````JSON
+  "depends": [
+      {"name": "libcom", "module": "serial", "git": "git@github.com:user/mml.git"},
+      {"name": "libcom", "module": "bluetooth", "git": "git@github.com:user/mml.git"}]
 ````
 
 Note that a library package with multiple modules still has only one binary `.lib` (or `.a`) file.
 
 ### 2.2. Weak Dependencies ###
 Sometimes it may happen that two modules are interdependent. For instance `cool_A` needs a type definition that is provided by `cool_B`. Symbolic links can take care of this situation like shown below:
-````
-DevTreeRoot
-   |
-   +-- cool_A
-   |    |
-   |    +-- include
-   |           |
-   |           +-- cool_A
-   |           |     |
-   |           |     +-- hdr1.h
-   |           |     |
-   |           |     +-- hdr2.h
-   |           |
-   |           +--<cool_B>
-   |                 |
-   |                 +-- hdr1.h
-   |                 |
-   |                 +-- hdr2.h
-   +-- cool_B
-        |
-        +-- include
-               |
-               +-- cool_B
-               |     |
-               |     +-- hdr1.h
-               |     |
-               |     +-- hdr4.h
-               |
-               +--<cool_A>
-                     |
-                     +-- hdr1.h
-                     |
-                     +-- hdr2.h
-````
+
+![](docs/diag5.svg)
+
 In such cases, CPM has to fetch the packages and create the symbolic links but should not initiate the build process of `cool_B` as part of the build process for `cool_A`. These situations are called *weak dependencies* and are flagged by the `fetchOnly` flag in the CPM.JSON file.
 
 ### 2.3. Compatibility with other code layout schemes ###
@@ -306,7 +196,7 @@ CPM reads the CPM.JSON file in the selected folder and, for each dependent packa
 The next step is to build build each package by issuing the build commands appropriate for the OS environment. All commands that have an `os` attribute matching the current OS or without any `os` attribute are issued in order.
 
 ## 7. Proving Ground ##
-CPM can be tested using a [sample project](https://github.com/neacsum/example_super_app). To use it follow these steps:
+CPM can be tested using a [sample project](https://github.com/neacsum/example_super_app). To use it, follow these steps:
 1. Make sure you have installed Visual Studio 2017 or higher (preferably VS2022).
 2. Download [CPM](https://github.com/neacsum/cpm/releases/latest/download/cpm.exe) program and place it somewhere in the path
 3. Create a `devroot` folder:
@@ -328,3 +218,41 @@ If all goes well, you should have a file `c:\temp\devroot\super_app\build\app\x6
 - `cool_B.lib`
 - `multi_mod.lib`
 
+## 8. Integration with GitHub actions ##
+CPM can be integrated with GitHub actions. You only need to fetch the CPM program and run it. Below is an example pulled from the same proving ground application:
+```yaml
+name: Build
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+env:
+  # This is the destination directory for CPM tool
+  USERPROFILE: .
+  
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:      
+      - name: Get CPM
+        uses: engineerd/configurator@v0.0.8
+        with:
+          name: cpm.exe
+          url: https://github.com/neacsum/cpm/releases/latest/download/cpm.exe
+      
+      - name: Clone
+        run: git clone https://github.com/neacsum/example_super_app.git .\super_app
+
+      - name: Build
+        run: cpm -v -r . super_app
+        
+      - name: Run app
+        run: .\super_app\build\app\x64\Debug\super_app.exe
+```
+It uses an action to [fetch](https://github.com/marketplace/actions/engineerd-configurator) the CPM executable, clones the repo to be built and invokes CPM to build it.

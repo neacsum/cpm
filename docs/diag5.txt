@@ -1,0 +1,38 @@
+DevTreeRoot
+   |
+   +-- cool_A
+   |    .
+   |    |
+   |    +-- include
+   |           |
+   |           +-- cool_A
+   |           |     .
+   |           |     |
+   |           |     +-- hdr1.h
+   |           |     |
+   |           |     +-- hdr2.h
+   |           |
+   |           +--<cool_B>
+   |                 .
+   |                 |
+   |                 +-- hdr1.h
+   |                 |
+   |                 +-- hdr2.h
+   +-- cool_B
+        .
+        |
+        +-- include
+               |
+               +-- cool_B
+               |     .
+               |     |
+               |     +-- hdr1.h
+               |     |
+               |     +-- hdr4.h
+               |
+               +--<cool_A>
+                     .
+                     |
+                     +-- hdr1.h
+                     |
+                     +-- hdr2.h

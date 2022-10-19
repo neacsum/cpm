@@ -1,0 +1,10 @@
+DevTreeRoot
+|
++-- dependent package
+|      |
+|      +-- include
+|             |
+|             +-- <serial>
+|             |      |
+|             |      +-- stuff.h
+...

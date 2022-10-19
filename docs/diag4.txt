@@ -1,0 +1,14 @@
+DevTreeRoot
+|
++-- libcom
+|      |
+|      +-- include
+|             |
+|             +-- serial
+|             |     |
+|             |     +-- stuff.h
+|             |
+|             +-- bluetooth
+|                   |
+|                   +-- other_stuff.h
+...
