@@ -21,6 +21,8 @@ package main
 		-f fetch-only (do not build)
 		-l local-only (do not pull)
 		-v verbose
+		-r <dir> root directory
+		--proto [git | https] protocol used for cloning
 
 	The program opens the '${DEV_ROOT}/<project>/cpm.json' file and
 	recursively searches and builds all dependencies.
@@ -41,7 +43,7 @@ import (
 	"time"
 )
 
-const Version = "V0.4.1"
+const Version = "V0.5.0"
 
 type BuildCommands struct {
 	Os   string
@@ -52,14 +54,20 @@ type BuildCommands struct {
 type DependencyDescriptor struct {
 	Name      string
 	Git       string
-	Module    string
+	Https     string
+	Module    ModList
 	FetchOnly bool
 	pack      *PacUnit
+}
+
+type ModList struct {
+	module []string
 }
 
 type PacUnit struct {
 	Name    string
 	Git     string
+	Https   string
 	Build   []BuildCommands
 	Depends []DependencyDescriptor
 	built   bool
@@ -79,7 +87,8 @@ var fetch_flag = flag.Bool("f", false, "fetch only (no build)")
 var local_flag = flag.Bool("l", false, "local only (no pull)")
 var verbose_flag = flag.Bool("v", false, "verbose")
 var branch_flag = flag.String("b", "", "select branch")
-var root_flag = flag.String("r", "", "set develpment tree root")
+var root_flag = flag.String("r", "", "develpment tree root")
+var proto_flag = flag.String("proto", "git", "download protocol")
 
 func main() {
 	var err error
@@ -95,6 +104,7 @@ func main() {
     -f fetch-only (no build)
     -l local-only (no pull)
 	-r <folder> set root of development tree
+	--proto [git|https] select download protocol
     -v verbose
     -h help - prints this message`)
 	}
@@ -102,6 +112,10 @@ func main() {
 	flag.Parse()
 	if flag.NFlag() == 0 && flag.NArg() > 0 && flag.Arg(0) == "version" {
 		os.Exit(0)
+	}
+
+	if (*proto_flag != "git") && (*proto_flag != "https") {
+		log.Fatal("Unknown protocol. Must be 'git' or 'https'")
 	}
 
 	if *root_flag != "" {
@@ -171,7 +185,7 @@ func fetch(p *PacUnit) {
 		if err := os.Mkdir(pacdir, 0666); err != nil {
 			log.Fatalf("error %d - cannot create folder %s", err, pacdir)
 		}
-		git_clone(p.Git, p.Name)
+		git_clone(p)
 		os.Chdir(pacdir)
 	} else {
 		os.Chdir(pacdir)
@@ -214,6 +228,7 @@ func fetch(p *PacUnit) {
 				all_packs = append(all_packs, d)
 				d.Name = p.Depends[i].Name
 				d.Git = p.Depends[i].Git
+				d.Https = p.Depends[i].Https
 				fetch(d)
 				p.Depends[i].pack = d
 			} else {
@@ -230,10 +245,12 @@ func fetch(p *PacUnit) {
 		//create symlinks to dependents
 		for _, dep := range p.Depends {
 			var target string
-			if len(dep.Module) != 0 {
-				target = filepath.Join(devroot, dep.Name, "include", dep.Module)
-				Verbosef("In %s creating symlink %s --> %s\n", cwd, target, dep.Module)
-				os.Symlink(target, dep.Module)
+			if len(dep.Module.module) != 0 {
+				for _, m := range dep.Module.module {
+					target = filepath.Join(devroot, dep.Name, "include", m)
+					Verbosef("In %s creating symlink %s --> %s\n", cwd, target, m)
+					os.Symlink(target, m)
+				}
 			} else {
 				target = filepath.Join(devroot, dep.Name, "include", dep.Name)
 				Verbosef("In %s creating symlink %s --> %[3]s\n", cwd, target, dep.Name)
@@ -318,10 +335,33 @@ func Run(prog string, args []string) (int, error) {
 	return cmd.ProcessState.ExitCode(), nil
 }
 
-func git_clone(url, dir string) {
-	fullpath := devroot + dir
+func git_clone(p *PacUnit) {
 
-	Verbosef("Cloning: %s in %s\n", url, dir)
+	fullpath := devroot + p.Name
+	Verbosef("Cloning: %s in %s\n", p.Name, fullpath)
+
+	// Find URL for cloning
+	var url string
+	if *proto_flag == "https" {
+		if p.Https == "" {
+			Verboseln("  -- missing https URI")
+			url = p.Git
+		} else {
+			url = p.Https
+		}
+	} else {
+		if p.Git == "" {
+			Verboseln("  -- missing git URI")
+			url = p.Https
+		} else {
+			url = p.Git
+		}
+	}
+	if url == "" {
+		log.Fatal("Missing package location.")
+	}
+
+	//Build git command
 	var args []string
 	args = append(args, "clone")
 	if *branch_flag != "" {
@@ -329,6 +369,8 @@ func git_clone(url, dir string) {
 	}
 	args = append(args, url, fullpath)
 	Verboseln("git ", args)
+
+	//Clone
 	if stat, err := Run("git", args); err != nil || stat != 0 {
 		log.Fatalf("Cloning failed \nStatus %d Error: %v\n", stat, err)
 	}
@@ -372,4 +414,19 @@ func Verbosef(f string, a ...interface{}) {
 	if *verbose_flag {
 		fmt.Printf(f, a...)
 	}
+}
+
+//Handles a modules list that contains either a string or an array
+func (m *ModList) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '[' {
+		//array
+		return json.Unmarshal(b, &m.module)
+	}
+
+	var s string
+	err := json.Unmarshal(b, &s)
+	if err == nil {
+		m.module = append(m.module, s)
+	}
+	return err
 }
