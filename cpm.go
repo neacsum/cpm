@@ -55,13 +55,9 @@ type DependencyDescriptor struct {
 	Name      string
 	Git       string
 	Https     string
-	Module    ModList
+	Modules   []string
 	FetchOnly bool
 	pack      *PacUnit
-}
-
-type ModList struct {
-	module []string
 }
 
 type PacUnit struct {
@@ -245,8 +241,8 @@ func fetch(p *PacUnit) {
 		//create symlinks to dependents
 		for _, dep := range p.Depends {
 			var target string
-			if len(dep.Module.module) != 0 {
-				for _, m := range dep.Module.module {
+			if len(dep.Modules) != 0 {
+				for _, m := range dep.Modules {
 					target = filepath.Join(devroot, dep.Name, "include", m)
 					Verbosef("In %s creating symlink %s --> %s\n", cwd, target, m)
 					os.Symlink(target, m)
@@ -414,19 +410,4 @@ func Verbosef(f string, a ...interface{}) {
 	if *verbose_flag {
 		fmt.Printf(f, a...)
 	}
-}
-
-//Handles a modules list that contains either a string or an array
-func (m *ModList) UnmarshalJSON(b []byte) error {
-	if len(b) > 0 && b[0] == '[' {
-		//array
-		return json.Unmarshal(b, &m.module)
-	}
-
-	var s string
-	err := json.Unmarshal(b, &s)
-	if err == nil {
-		m.module = append(m.module, s)
-	}
-	return err
 }

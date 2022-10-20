@@ -118,12 +118,12 @@ Sometimes, a library may contain more than one group of files. For instance a co
 #include <serial/stuff.h>
 #include <bluetooh/other_stuff.h>
 ```
-If a dependent package wants to include only one module of the library, it can use the `module` attribute in the dependency descriptor.
+If a dependent package wants to include only one module of the library, it can use the `modules` attribute in the dependency descriptor.
 
 Example:
 ````JSON
   "depends": [
-      {"name": "libcom", "module": "serial", "git": "git@github.com:user/mml.git"}]
+      {"name": "libcom", "modules": ["serial"], "git": "git@github.com:user/mml.git"}]
 ````
 This will produce the following folder structure (again, angle brackets denote symbolic links):  
 ![](docs/diag4_1.svg)
@@ -131,8 +131,11 @@ This will produce the following folder structure (again, angle brackets denote s
 It is OK to refer more than one module:
 ````JSON
   "depends": [
-      {"name": "libcom", "module": "serial", "git": "git@github.com:user/mml.git"},
-      {"name": "libcom", "module": "bluetooth", "git": "git@github.com:user/mml.git"}]
+      {
+        "name": "libcom",  
+        "git": "git@github.com:user/mml.git", 
+        "modules": ["serial", "bluetooth"]
+      },
 ````
 
 Note that a library package with multiple modules still has only one binary `.lib` (or `.a`) file.
@@ -145,7 +148,7 @@ Sometimes it may happen that two modules are interdependent. For instance `cool_
 In such cases, CPM has to fetch the packages and create the symbolic links but should not initiate the build process of `cool_B` as part of the build process for `cool_A`. These situations are called *weak dependencies* and are flagged by the `fetchOnly` flag in the CPM.JSON file.
 
 ### 2.3. Compatibility with other code layout schemes ###
-The layout required by CPM is simple and so, very compatible with other layout recommendations. My personal favorite is [The Pitchfork Layout](https://api.csswg.org/bikeshed/?force=1&url=https://raw.githubusercontent.com/vector-of-bool/pitchfork/spec/data/spec.bs). Note however the following differences:
+The layout required by CPM is simple and, as such, very compatible with other layout recommendations. My personal favorite is [The Pitchfork Layout](https://api.csswg.org/bikeshed/?force=1&url=https://raw.githubusercontent.com/vector-of-bool/pitchfork/spec/data/spec.bs). Note however the following differences:
 - PFL does not describe any mechanism for cooperation between different packages. The symbolic links mechanism described in this document is specific to CPM.
 - PFL does not use a shared `lib/` directory. The PFL `libs/` folder is used for a different purpose.
 
@@ -172,6 +175,7 @@ Valid options are:
   - `-F` discards local changes when switching branches (issues a `git switch -f ...` command)
   - `-f` fetch-only (no build)
   - `-l` local-only (no pull)
+  - `--proto [git | https]` preferred protocol for package cloning 
   - `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
   - `-v` verbose
 
@@ -179,15 +183,17 @@ Valid options are:
 |Level | Attribute   | Value  | Semantics |
 |------|-------------|--------|-----------|
 | 1    | `name`      | string | Name of package |
-| 1    | `git`       | string | Download location for the package |
+| 1    | `git`       | string | Download location for the package using _git_ protocol |
+| 1    | `https`     | string | Download location for the package using _https_ protocol |
 | 1    | `build`     | array  | Commands to be issued for building the package. |
 | 2    | `os`        | string | OS to which the build command applies |
 | 2    | `command`   | string | Command issued for building the package |
 | 2    | `args`      | array  | Command arguments |
 | 1    | `depends`   | array  | Package dependencies |
 | 2    | `name`      | string | Name of dependency |
-| 2    | `git`       | string | Download location for dependency |
-| 2    | `module`    | string | Module name for packages with multiple modules |
+| 2    | `git`       | string | Download location for dependency using _git_ protocol |
+| 2    | `https`     | string | Download location for dependency using _https_ protocol |
+| 2    | `modules`   | array  | Module names for packages with multiple modules |
 | 2    | `fetchOnly` | bool   | Weak dependency (see below) |
 
 ## 6. Operation ##
@@ -250,9 +256,11 @@ jobs:
         run: git clone https://github.com/neacsum/example_super_app.git .\super_app
 
       - name: Build
-        run: cpm -v -r . super_app
+        run: cpm -v --proto https -r . super_app
         
       - name: Run app
         run: .\super_app\build\app\x64\Debug\super_app.exe
 ```
 It uses an action to [fetch](https://github.com/marketplace/actions/engineerd-configurator) the CPM executable, clones the repo to be built and invokes CPM to build it.
+
+Note that the CPM command specifies the `--proto https` option. Using HTTPS protocol bypasses user authentication problems.
