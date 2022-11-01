@@ -2,17 +2,17 @@ package main
 
 /*
 	CPM - C/C++ Package Manager
-	(c) Mircea Neacsu 2021
+	(c) Mircea Neacsu 2021-2022
 
 	This tool uses simple JSON files to manage dependencies between
-	different projects.
+	different packages.
 
 	Usage:
-		cpm [options] [<project>]
+		cpm [options] [<package>]
 	  or
 	    cpm version
 
-	If project name is missing, the program assumes to be the current
+	If package name is missing, the program assumes to be the current
 	directory.
 
 	Valid options are:
@@ -21,13 +21,14 @@ package main
 		-f fetch-only (do not build)
 		-l local-only (do not pull)
 		-v verbose
-		-r <dir> root directory
+		--root <rootdir> (or -r <rootdir>) root directory of development tree
+		--uri <uri> (or -u <uri>) - URI of root package
 		--proto [git | https] protocol used for cloning
 
-	The program opens the '${DEV_ROOT}/<project>/cpm.json' file and
+	The program opens the '<rootdir>/<package>/cpm.json' file and
 	recursively searches and builds all dependencies.
 
-	${DEV_ROOT} environment variable is the root of development tree.
+	Default root of development tree is the ${DEV_ROOT} environment variable.
 */
 
 import (
@@ -43,7 +44,7 @@ import (
 	"time"
 )
 
-const Version = "V0.5.0"
+const Version = "V0.5.1"
 
 type BuildCommands struct {
 	Os   string
@@ -76,6 +77,7 @@ const descriptor_name = "cpm.json"
 var all_packs []*PacUnit
 
 var inprocess []string
+var root_uri string
 
 //command line flags
 var force_flag = flag.Bool("F", false, "discard local changes")
@@ -83,24 +85,28 @@ var fetch_flag = flag.Bool("f", false, "fetch only (no build)")
 var local_flag = flag.Bool("l", false, "local only (no pull)")
 var verbose_flag = flag.Bool("v", false, "verbose")
 var branch_flag = flag.String("b", "", "select branch")
-var root_flag = flag.String("r", "", "develpment tree root")
 var proto_flag = flag.String("proto", "git", "download protocol")
 
 func main() {
 	var err error
 
 	println("C/C++ Package Manager " + Version)
+	flag.StringVar(&root_uri, "uri", "", "root URI")
+	flag.StringVar(&root_uri, "u", "", "root URI")
+	flag.StringVar(&devroot, "r", os.Getenv("DEV_ROOT"), "development tree root")
+	flag.StringVar(&devroot, "root", os.Getenv("DEV_ROOT"), "development tree root")
 	start := time.Now()
 	flag.Usage = func() {
-		println(`Usage: cpm [options] [project]
+		println(`Usage: cpm [options] [package]
 				
-  If project is not specified, it is assumed to be the current directory.
+  If package is not specified, it is assumed to be the current directory.
   Valid options are:
     -b <branch name> checkout specific branch
     -f fetch-only (no build)
     -l local-only (no pull)
-	-r <folder> set root of development tree
-	--proto [git|https] select download protocol
+	-r <folder> - set root of development tree
+	--uri <uri> (or -u <uri>) - URI of root package
+	--proto [git|https]  - preferred download protocol
     -v verbose
     -h help - prints this message`)
 	}
@@ -114,37 +120,43 @@ func main() {
 		log.Fatal("Unknown protocol. Must be 'git' or 'https'")
 	}
 
-	if *root_flag != "" {
-		devroot = *root_flag
-	} else if devroot = os.Getenv("DEV_ROOT"); len(devroot) == 0 {
+	if devroot == "" {
 		log.Fatal("No development tree root specified and environment variable  DEV_ROOT is not set")
 	}
 	devroot, _ = filepath.Abs(devroot)
 
-	//make sure DEV_ROOT is terminated with a path separator
-	if devroot[len(devroot)-1] != '/' && devroot[len(devroot)-1] != '\\' {
-		devroot += "/"
-	}
-
+	var root_name string
 	if flag.NArg() > 0 {
 		dir := ""
-		//root project specified on command line
+		//root package specified on command line
 		if !strings.ContainsAny(flag.Arg(0), "\\/") {
+			//only a relative path - use DEVROOT as path
+			root_name = flag.Arg(0)
 			dir = devroot
+		} else {
+			_, root_name = filepath.Split(flag.Arg(0))
 		}
-		root_descriptor = filepath.Join(dir, flag.Arg(0), descriptor_name)
+		root_descriptor = filepath.Join(dir, root_name, descriptor_name)
 	} else {
-		//assume root project is in current folder
+		//assume root package is in current folder
 		cwd, _ := os.Getwd()
+		_, root_name = filepath.Split(cwd)
 		root_descriptor = filepath.Join(cwd, descriptor_name)
 	}
 
 	Verboseln("DEV_ROOT=", devroot)
 	Verboseln("Top descriptor is ", root_descriptor)
-	os.Mkdir(devroot+"lib", 0755)
+	os.Mkdir(filepath.Join(devroot, "lib"), 0755)
 
 	root := new(PacUnit)
 	all_packs = append(all_packs, root)
+
+	if root_uri != "" {
+		//fetch root package
+		root.Git = root_uri
+		root.Name = root_name
+		fetch(root)
+	}
 
 	var data []byte
 	if data, err = os.ReadFile(root_descriptor); err != nil {
@@ -155,12 +167,16 @@ func main() {
 		log.Fatalf("cannot parse %s - %v\n", root_descriptor, err)
 	}
 
-	os.Chdir(devroot + root.Name)
+	if root_name != "" && !strings.EqualFold(root.Name, root_name) {
+		fmt.Printf("WARNING specifed package directory '%s' does not match descriptor's package name (%s)\n", root_name, root.Name)
+		root.Name = root_name
+	}
+	os.Chdir(filepath.Join(devroot, root.Name))
 
 	cwd, _ := os.Getwd()
 	Verboseln("Changed directory to", cwd)
 
-	fetch(root)
+	fetch_all(root)
 
 	if !*fetch_flag {
 		inprocess = make([]string, 0, 10)
@@ -170,11 +186,12 @@ func main() {
 	fmt.Println("CPM operation finished in", time.Since(start).Round(100*time.Microsecond))
 }
 
-// Fetch a package and all its dependents
+// Fetch one package. Changes working directory to the package directory
 func fetch(p *PacUnit) {
-	pacdir := devroot + p.Name
+	pacdir := filepath.Join(devroot, p.Name)
 
 	if _, err := os.Stat(pacdir); os.IsNotExist(err) {
+		//package directory doesn't exist; create it and clone repo
 		if *local_flag {
 			log.Fatalf("Fatal - local-only mode and %s does not exist", p.Name)
 		}
@@ -183,13 +200,23 @@ func fetch(p *PacUnit) {
 		}
 		git_clone(p)
 		os.Chdir(pacdir)
+	} else if _, err := os.Stat(filepath.Join(pacdir, ".git")); os.IsNotExist(err) {
+		//package directory exists but no git repo here; clone repo
+		git_clone(p)
+		os.Chdir(pacdir)
 	} else {
+		//repo exists; just pull latest version
 		os.Chdir(pacdir)
 		if !*local_flag {
 			git_pull(pacdir)
 		}
 	}
+}
 
+// Fetch a package and all its dependents
+func fetch_all(p *PacUnit) {
+
+	fetch(p) //fetch top package
 	cwd, _ := os.Getwd()
 	Verbosef("Setting up %s in %s\n", p.Name, cwd)
 
@@ -225,17 +252,17 @@ func fetch(p *PacUnit) {
 				d.Name = p.Depends[i].Name
 				d.Git = p.Depends[i].Git
 				d.Https = p.Depends[i].Https
-				fetch(d)
+				fetch_all(d)
 				p.Depends[i].pack = d
 			} else {
 				p.Depends[i].pack = all_packs[idx]
 				Verbosef("Package %s has already been configured\n", p.Depends[i].Name)
 			}
 		}
-
-		if os.Chdir(pacdir+"/include") != nil {
-			os.Mkdir(pacdir+"/include", 0755)
-			os.Chdir(pacdir + "/include")
+		incdir := filepath.Join(cwd, "include")
+		if os.Chdir(incdir) != nil {
+			os.Mkdir(incdir, 0755)
+			os.Chdir(incdir)
 		}
 
 		//create symlinks to dependents
@@ -270,7 +297,7 @@ func build(p *PacUnit) {
 
 	//keep track of packeges that are in process to avoid dependency cycles
 	inprocess = append(inprocess, p.Name)
-	pacdir := devroot + p.Name
+	pacdir := filepath.Join(devroot, p.Name)
 	os.Chdir(pacdir) //that should be ok. Package has been fetched already
 	cwd, _ := os.Getwd()
 	Verbosef("Building %s in %s \n", p.Name, cwd)
@@ -331,29 +358,29 @@ func Run(prog string, args []string) (int, error) {
 	return cmd.ProcessState.ExitCode(), nil
 }
 
+// Clone a repo
 func git_clone(p *PacUnit) {
-
-	fullpath := devroot + p.Name
+	fullpath := filepath.Join(devroot, p.Name)
 	Verbosef("Cloning: %s in %s\n", p.Name, fullpath)
 
 	// Find URL for cloning
-	var url string
+	var uri string
 	if *proto_flag == "https" {
 		if p.Https == "" {
 			Verboseln("  -- missing https URI")
-			url = p.Git
+			uri = p.Git
 		} else {
-			url = p.Https
+			uri = p.Https
 		}
 	} else {
 		if p.Git == "" {
 			Verboseln("  -- missing git URI")
-			url = p.Https
+			uri = p.Https
 		} else {
-			url = p.Git
+			uri = p.Git
 		}
 	}
-	if url == "" {
+	if uri == "" {
 		log.Fatal("Missing package location.")
 	}
 
@@ -363,7 +390,7 @@ func git_clone(p *PacUnit) {
 	if *branch_flag != "" {
 		args = append(args, "-b", *branch_flag)
 	}
-	args = append(args, url, fullpath)
+	args = append(args, uri, fullpath)
 	Verboseln("git ", args)
 
 	//Clone
