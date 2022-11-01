@@ -96,13 +96,13 @@ An additional advantage of this organization is that it prevents name clashes be
 
 > **RULE 3** - Include folders of dependent modules are made visible through symbolic links
 
-In the structure shown before, the application that uses `cool_A` and `cool_B` will have an `include` folder but in this folder there are _symbolic links_ to `cool_A` and `cool_B` include folders. The folder structure will look something like this (angle brackets denote symbolic links):
+In the structure shown before, the application that uses `cool_A` and `cool_B` will have an `include` folder but in this folder there are _symbolic links_ to `cool_A` and `cool_B` include folders. The folder structure will look something like this (blue items in angle brackets denote symbolic links):
 
 ![](docs/diag2.svg)
 
 > **RULE 4** - All binary library packages reside in a `lib` folder at the root of development tree. Each package contains a _symbolic link_ to this folder.
 
-Without repeating the parts already shown of the files layout, here is the part related to `lib` folder (again, angle brackets denote symbolic links):
+Without repeating the parts already shown of the files layout, here is the part related to `lib` folder (again, blue items denote symbolic links):
 
 ![](docs/diag3.svg)
 
@@ -122,10 +122,10 @@ If a dependent package wants to include only one module of the library, it can u
 
 Example:
 ````JSON
-  "depends": [
-      {"name": "libcom", "modules": ["serial"], "git": "git@github.com:user/mml.git"}]
+"depends": [
+    {"name": "libcom", "modules": ["serial"], "git": "git@github.com:user/mml.git"}]
 ````
-This will produce the following folder structure (again, angle brackets denote symbolic links):  
+This will produce the following folder structure (again, blue denotes symbolic links):  
 ![](docs/diag4_1.svg)
 
 It is OK to refer more than one module:
@@ -161,14 +161,14 @@ There are no other dependencies and you just have to place the CPM executable so
 
 ## 4. Usage ##
 ````
-cpm [options] [project]
+cpm [options] [package]
 ````
 or
 ````
 cpm version
 ````
 
-If `project` is not specified, it is assumed to be in the current directory.
+If `package` is not specified, it is assumed to be in the current directory.
 
 Valid options are:
   - `-b <branch_name>` switches to a specific branch
@@ -176,7 +176,8 @@ Valid options are:
   - `-f` fetch-only (no build)
   - `-l` local-only (no pull)
   - `--proto [git | https]` preferred protocol for package cloning 
-  - `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
+  - `--root <folder>` or `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
+  - `--uri <uri>` or `-u <uri>` set URI for fetching root package
   - `-v` verbose
 
 ## 5. Semantics of CPM.JSON file ##

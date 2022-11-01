@@ -1,25 +1,32 @@
 DevTreeRoot
-   |
-   +-- cool_A
-   |     .
-   |     |
-   |    ...
-   |     +-- <lib>
-   |           |
-   |           all link libraries are here
-   +-- cool_B
-   |     .
-   |     |
-   |    ...
-   |     +-- <lib>
-   |           |
-   |           all link libraries are here
-   +-- SuperApp
-   |      |
-   |     ...
-   |      +-- <lib>
-   |            |
-   |            all link libraries are here
-   +-- lib
-        |
-        all link libraries are here
+  .
+  |
+  +-- cool_A
+  |     .
+  |     |
+  |    ...
+  |     |
+  |     +-- <lib>
+  |           |
+  |           +-> all link libraries are here
+  |
+  +-- cool_B
+  |     .
+  |     |
+  |    ...
+  |     |
+  |     +-- <lib>
+  |           |
+  |           +-> all link libraries are here
+  |
+  +-- SuperApp
+  |      |
+  |     ...
+  |      |
+  |      +-- <lib>
+  |            |
+  |            +-> all link libraries are here
+  |
+  +-- lib
+       |
+       +-> all link libraries are here
