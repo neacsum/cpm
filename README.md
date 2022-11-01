@@ -221,7 +221,7 @@ c:\temp\devroot>git clone git@github.com:neacsum/example_super_app.git super_app
 c:\temp\devroot>cpm super_app
 ````
 If all goes well, you should have a file `c:\temp\devroot\super_app\build\app\x64\Debug\super_app.exe`. Also the directory `c:\temp\devroot\lib\x64\Debug` should contain the files
-- `cool_A.lib`,
+- `cool_A.lib`
 - `cool_B.lib`
 - `multi_mod.lib`
 
