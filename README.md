@@ -178,7 +178,10 @@ Valid options are:
   - `--proto [git | https]` preferred protocol for package cloning 
   - `--root <folder>` or `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
   - `--uri <uri>` or `-u <uri>` set URI for fetching root package
+  - `--version` show program version
   - `-v` verbose
+  - `--help` or `-h` show usage information
+
 
 ## 5. Semantics of CPM.JSON file ##
 |Level | Attribute   | Value  | Semantics |

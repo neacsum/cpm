@@ -1,34 +1,35 @@
 package main
 
 /*
-	CPM - C/C++ Package Manager
-	(c) Mircea Neacsu 2021-2022
+  CPM - C/C++ Package Manager
+  (c) Mircea Neacsu 2021-2022
 
-	This tool uses simple JSON files to manage dependencies between
-	different packages.
+  This tool uses simple JSON files to manage dependencies between
+  different packages.
 
-	Usage:
-		cpm [options] [<package>]
-	  or
-	    cpm version
+  Usage:
+    cpm [options] [<package>]
+    or
+      cpm version
 
-	If package name is missing, the program assumes to be the current
-	directory.
+  If package name is missing, the program assumes to be the current
+  directory.
 
-	Valid options are:
-	    -b <branch name> switches to specific branch
-		-F discards local changes when switching branches
-		-f fetch-only (do not build)
-		-l local-only (do not pull)
-		-v verbose
-		--root <rootdir> (or -r <rootdir>) root directory of development tree
-		--uri <uri> (or -u <uri>) - URI of root package
-		--proto [git | https] protocol used for cloning
+  Valid options are:
+    -b <branch name> switches to specific branch
+    -F discards local changes when switching branches
+    -f fetch-only (do not build)
+    -l local-only (do not pull)
+    -v verbose
+    --root <rootdir> (or -r <rootdir>) - root directory of development tree
+    --uri <uri> (or -u <uri>) - URI of root package
+    --proto [git | https] - protocol used for cloning
+    --version  - show version
 
-	The program opens the '<rootdir>/<package>/cpm.json' file and
-	recursively searches and builds all dependencies.
+  The program opens the '<rootdir>/<package>/cpm.json' file and
+  recursively searches and builds all dependencies.
 
-	Default root of development tree is the ${DEV_ROOT} environment variable.
+  Default root of development tree is the ${DEV_ROOT} environment variable.
 */
 
 import (
@@ -79,7 +80,7 @@ var all_packs []*PacUnit
 var inprocess []string
 var root_uri string
 
-//command line flags
+// command line flags
 var force_flag = flag.Bool("F", false, "discard local changes")
 var fetch_flag = flag.Bool("f", false, "fetch only (no build)")
 var local_flag = flag.Bool("l", false, "local only (no pull)")
@@ -89,30 +90,32 @@ var proto_flag = flag.String("proto", "git", "download protocol")
 
 func main() {
 	var err error
+	var show_ver bool
 
 	println("C/C++ Package Manager " + Version)
 	flag.StringVar(&root_uri, "uri", "", "root URI")
 	flag.StringVar(&root_uri, "u", "", "root URI")
 	flag.StringVar(&devroot, "r", os.Getenv("DEV_ROOT"), "development tree root")
 	flag.StringVar(&devroot, "root", os.Getenv("DEV_ROOT"), "development tree root")
+	flag.BoolVar(&show_ver, "version", false, "show version")
 	start := time.Now()
 	flag.Usage = func() {
 		println(`Usage: cpm [options] [package]
-				
+        
   If package is not specified, it is assumed to be the current directory.
   Valid options are:
-    -b <branch name> checkout specific branch
-    -f fetch-only (no build)
-    -l local-only (no pull)
-	-r <folder> - set root of development tree
-	--uri <uri> (or -u <uri>) - URI of root package
-	--proto [git|https]  - preferred download protocol
-    -v verbose
-    -h help - prints this message`)
+    -b <branch name>          checkout specific branch
+    -f                        fetch-only (no build)
+    -l                        local-only (no pull)
+    -r <folder>               set root of development tree
+    --uri <uri> (or -u <uri>) URI of root package
+    --proto [git|https]       preferred download protocol
+    -v                        verbose
+    --help (or -h)            prints this message`)
 	}
 
 	flag.Parse()
-	if flag.NFlag() == 0 && flag.NArg() > 0 && flag.Arg(0) == "version" {
+	if show_ver || (flag.NFlag() == 0 && flag.NArg() > 0 && flag.Arg(0) == "version") {
 		os.Exit(0)
 	}
 
@@ -283,7 +286,7 @@ func fetch_all(p *PacUnit) {
 	}
 }
 
-//Build a packge after first having built its dependents
+// Build a packge after first having built its dependents
 func build(p *PacUnit) {
 	if p.built {
 		Verboseln("Package", p.Name, "has already been built")
@@ -324,9 +327,9 @@ func build(p *PacUnit) {
 }
 
 /*
-	Execute the appropriate build command for a package. If there is a specific
-	command for the current OS envirnoment, use that one. Otherwise choose a
-	generic one (os set to "any" or "")
+Execute the appropriate build command for a package. If there is a specific
+command for the current OS envirnoment, use that one. Otherwise choose a
+generic one (os set to "any" or "")
 */
 func do_build(commands []BuildCommands) (int, error) {
 	var ret int
