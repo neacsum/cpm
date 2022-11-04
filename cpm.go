@@ -34,6 +34,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -45,7 +46,7 @@ import (
 	"time"
 )
 
-const Version = "V0.5.1"
+const Version = "V0.5.2"
 
 type BuildCommands struct {
 	Os   string
@@ -327,9 +328,9 @@ func build(p *PacUnit) {
 }
 
 /*
-Execute the appropriate build command for a package. If there is a specific
-command for the current OS envirnoment, use that one. Otherwise choose a
-generic one (os set to "any" or "")
+  Execute the appropriate build command for a package. If there is a specific
+  command for the current OS envirnoment, use that one. Otherwise choose a
+  generic one (os set to "any" or "")
 */
 func do_build(commands []BuildCommands) (int, error) {
 	var ret int
@@ -340,7 +341,10 @@ func do_build(commands []BuildCommands) (int, error) {
 		return 0, nil
 	}
 	for _, c := range commands {
-		if len(c.Os) == 0 || c.Os == "any" || (len(c.Os) > 0 && c.Os == runtime.GOOS) {
+		if c.Os == "" {
+			c.Os = "any"
+		}
+		if c.Os == "any" || c.Os == runtime.GOOS {
 			Verbosef("OS: %s cmd: %s %v\n", c.Os, c.Cmd, c.Args)
 			if ret, err = Run(c.Cmd, c.Args); ret != 0 {
 				return ret, err
@@ -350,8 +354,16 @@ func do_build(commands []BuildCommands) (int, error) {
 	return ret, err
 }
 
+/*
+  Run a program with arguments.
+
+  GO 1.19 oesn't allow relative paths. Here however we allow those.
+*/
 func Run(prog string, args []string) (int, error) {
 	cmd := exec.Command(prog, args...)
+	if errors.Is(cmd.Err, exec.ErrDot) && runtime.GOOS == "windows" {
+		cmd.Err = nil
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
