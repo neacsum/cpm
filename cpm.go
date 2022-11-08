@@ -46,7 +46,7 @@ import (
 	"time"
 )
 
-const Version = "V0.5.2"
+const Version = "V0.5.3"
 
 type BuildCommands struct {
 	Os   string
@@ -184,6 +184,11 @@ func main() {
 
 	if !*fetch_flag {
 		inprocess = make([]string, 0, 10)
+		if root_name != "" && !strings.EqualFold(root.Name, root_name) {
+			//Descriptor parsing has changed the root name from what user wants.
+			//Resore it now.
+			root.Name = root_name
+		}
 		build(root)
 	}
 
@@ -224,7 +229,7 @@ func fetch_all(p *PacUnit) {
 	cwd, _ := os.Getwd()
 	Verbosef("Setting up %s in %s\n", p.Name, cwd)
 
-	os.Symlink(devroot+"lib", "lib")
+	os.Symlink(filepath.Join(devroot, "lib"), "lib")
 
 	data, err := os.ReadFile(descriptor_name)
 	if err != nil {
