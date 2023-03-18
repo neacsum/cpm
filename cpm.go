@@ -2,7 +2,7 @@ package main
 
 /*
   CPM - C/C++ Package Manager
-  (c) Mircea Neacsu 2021-2022
+  (c) Mircea Neacsu 2021-2023
 
   This tool uses simple JSON files to manage dependencies between
   different packages.
@@ -46,7 +46,7 @@ import (
 	"time"
 )
 
-const Version = "V0.5.3"
+const Version = "V0.5.4"
 
 type BuildCommands struct {
 	Os   string
@@ -105,14 +105,14 @@ func main() {
         
   If package is not specified, it is assumed to be the current directory.
   Valid options are:
-    -b <branch name>          checkout specific branch
-    -f                        fetch-only (no build)
-    -l                        local-only (no pull)
-    -r <folder>               set root of development tree
-    --uri <uri> (or -u <uri>) URI of root package
-    --proto [git|https]       preferred download protocol
-    -v                        verbose
-    --help (or -h)            prints this message`)
+    -b <branch name>          	checkout specific branch
+    -f                        	fetch-only (no build)
+    -l                        	local-only (no pull)
+    --root <dir> (or -r <dir>)  set root of development tree
+    --uri <uri> (or -u <uri>) 	URI of root package
+    --proto [git|https]       	preferred download protocol
+    -v                        	verbose
+    --help (or -h)            	prints this message`)
 	}
 
 	flag.Parse()
@@ -122,6 +122,10 @@ func main() {
 
 	if (*proto_flag != "git") && (*proto_flag != "https") {
 		log.Fatal("Unknown protocol. Must be 'git' or 'https'")
+	}
+
+	if root_uri != "" && *local_flag {
+		log.Fatal("Local mode only. Cannot fetch root package!!");
 	}
 
 	if devroot == "" {
@@ -225,7 +229,9 @@ func fetch(p *PacUnit) {
 // Fetch a package and all its dependents
 func fetch_all(p *PacUnit) {
 
-	fetch(p) //fetch top package
+	if (!*local_flag) {
+		fetch(p) //fetch top package
+	}
 	cwd, _ := os.Getwd()
 	Verbosef("Setting up %s in %s\n", p.Name, cwd)
 
