@@ -205,9 +205,6 @@ func fetch(p *PacUnit) {
 
 	if _, err := os.Stat(pacdir); os.IsNotExist(err) {
 		//package directory doesn't exist; create it and clone repo
-		if *local_flag {
-			log.Fatalf("Fatal - local-only mode and %s does not exist", p.Name)
-		}
 		if err := os.Mkdir(pacdir, 0666); err != nil {
 			log.Fatalf("error %d - cannot create folder %s", err, pacdir)
 		}
@@ -220,9 +217,7 @@ func fetch(p *PacUnit) {
 	} else {
 		//repo exists; just pull latest version
 		os.Chdir(pacdir)
-		if !*local_flag {
-			git_pull(pacdir)
-		}
+		git_pull(pacdir)
 	}
 }
 
@@ -231,6 +226,11 @@ func fetch_all(p *PacUnit) {
 
 	if (!*local_flag) {
 		fetch(p) //fetch top package
+	} else {
+		pacdir := filepath.Join(devroot, p.Name)
+		if os.Chdir(pacdir) != nil {
+			log.Fatalf("Fatal - local-only mode and %s does not exist", pacdir)
+		}
 	}
 	cwd, _ := os.Getwd()
 	Verbosef("Setting up %s in %s\n", p.Name, cwd)
