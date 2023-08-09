@@ -3,6 +3,7 @@
 - [1. A Basic Example](#1-a-basic-example)
 - [2. Code Layout Rules](#2-code-layout-rules)
   - [2.1. Multi-module library packages](#21-multi-module-library-packages)
+- [Note that a library package with multiple modules still has only one binary `.lib` (or `.a`) file.](#note-that-a-library-package-with-multiple-modules-still-has-only-one-binary-lib-or-a-file)
   - [2.2. Weak Dependencies](#22-weak-dependencies)
   - [2.3. Compatibility with other code layout schemes](#23-compatibility-with-other-code-layout-schemes)
 - [3. Installation](#3-installation)
@@ -109,7 +110,7 @@ Without repeating the parts already shown of the files layout, here is the part 
 If there are different flavors of link libraries (debug, release, 32-bit, 64-bit) they can be accommodated as subfolders of the `lib` folder.
 
 ### 2.1. Multi-module library packages ###
-Sometimes, a library may contain more than one group of files. For instance a communication library may contain a group of functions for serial communication, another for Bluetooth communication, and so on. We call these groups of files *modules*. In this case, the header files can be divided in different folders, one for each module in the library:
+Sometimes, a library may contain more than one group of files. For instance a communication library may contain a group of functions for serial communication, another for Bluetooth communication, and so on. We call these groups of files *modules*<sup>[1]</sup>. In this case, the header files can be divided in different folders, one for each module in the library:
 
 ![](docs/diag4.svg)
 
@@ -135,11 +136,12 @@ It is OK to refer more than one module:
         "name": "libcom",  
         "git": "git@github.com:user/mml.git", 
         "modules": ["serial", "bluetooth"]
-      },
+      }]
 ````
 
 Note that a library package with multiple modules still has only one binary `.lib` (or `.a`) file.
-
+---
+<sup>1</sup> The word *module* is heavily overused in the software arena; adding one more use is not going to make much difference.
 ### 2.2. Weak Dependencies ###
 Sometimes it may happen that two modules are interdependent. For instance `cool_A` needs a type definition that is provided by `cool_B`. Symbolic links can take care of this situation like shown below:
 
@@ -187,16 +189,16 @@ Valid options are:
 |Level | Attribute   | Value  | Semantics |
 |------|-------------|--------|-----------|
 | 1    | `name`      | string | Name of package |
-| 1    | `git`       | string | Download location for the package using _git_ protocol |
-| 1    | `https`     | string | Download location for the package using _https_ protocol |
+| 1    | `git`       | string | Download URL for the package using _git_ protocol |
+| 1    | `https`     | string | Download URL for the package using _https_ protocol |
 | 1    | `build`     | array  | Commands to be issued for building the package. |
 | 2    | `os`        | string | OS to which the build command applies |
 | 2    | `command`   | string | Command issued for building the package |
 | 2    | `args`      | array  | Command arguments |
 | 1    | `depends`   | array  | Package dependencies |
-| 2    | `name`      | string | Name of dependency |
-| 2    | `git`       | string | Download location for dependency using _git_ protocol |
-| 2    | `https`     | string | Download location for dependency using _https_ protocol |
+| 2    | `name`      | string | Name of dependent package |
+| 2    | `git`       | string | URL for downloading dependent package using _git_ protocol |
+| 2    | `https`     | string | URL for downloading dependent package using _https_ protocol |
 | 2    | `modules`   | array  | Module names for packages with multiple modules |
 | 2    | `fetchOnly` | bool   | Weak dependency (see below) |
 
