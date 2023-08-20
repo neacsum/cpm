@@ -37,6 +37,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -46,7 +47,7 @@ import (
 	"time"
 )
 
-const Version = "V0.5.4"
+const Version = "V0.5.5"
 
 type BuildCommands struct {
 	Os   string
@@ -125,7 +126,7 @@ func main() {
 	}
 
 	if root_uri != "" && *local_flag {
-		log.Fatal("Local mode only. Cannot fetch root package!!");
+		log.Fatal("Local mode only. Cannot fetch root package!!")
 	}
 
 	if devroot == "" {
@@ -223,11 +224,10 @@ func fetch(p *PacUnit) {
 
 // Fetch a package and all its dependents
 func fetch_all(p *PacUnit) {
-
-	if (!*local_flag) {
+	pacdir := filepath.Join(devroot, p.Name)
+	if !*local_flag {
 		fetch(p) //fetch top package
 	} else {
-		pacdir := filepath.Join(devroot, p.Name)
 		if os.Chdir(pacdir) != nil {
 			log.Fatalf("Fatal - local-only mode and %s does not exist", pacdir)
 		}
@@ -235,7 +235,7 @@ func fetch_all(p *PacUnit) {
 	cwd, _ := os.Getwd()
 	Verbosef("Setting up %s in %s\n", p.Name, cwd)
 
-	os.Symlink(filepath.Join(devroot, "lib"), "lib")
+	Symlink(filepath.Join(devroot, "lib"), "lib")
 
 	data, err := os.ReadFile(descriptor_name)
 	if err != nil {
@@ -287,12 +287,12 @@ func fetch_all(p *PacUnit) {
 				for _, m := range dep.Modules {
 					target = filepath.Join(devroot, dep.Name, "include", m)
 					Verbosef("In %s creating symlink %s --> %s\n", cwd, target, m)
-					os.Symlink(target, m)
+					Symlink(target, m)
 				}
 			} else {
 				target = filepath.Join(devroot, dep.Name, "include", dep.Name)
 				Verbosef("In %s creating symlink %s --> %[3]s\n", cwd, target, dep.Name)
-				os.Symlink(target, dep.Name)
+				Symlink(target, dep.Name)
 			}
 		}
 	}
@@ -339,9 +339,9 @@ func build(p *PacUnit) {
 }
 
 /*
-  Execute the appropriate build command for a package. If there is a specific
-  command for the current OS envirnoment, use that one. Otherwise choose a
-  generic one (os set to "any" or "")
+Execute the appropriate build command for a package. If there is a specific
+command for the current OS envirnoment, use that one. Otherwise choose a
+generic one (os set to "any" or "")
 */
 func do_build(commands []BuildCommands) (int, error) {
 	var ret int
@@ -366,9 +366,9 @@ func do_build(commands []BuildCommands) (int, error) {
 }
 
 /*
-  Run a program with arguments.
+Run a program with arguments.
 
-  GO 1.19 oesn't allow relative paths. Here however we allow those.
+GO 1.19 oesn't allow relative paths. Here however we allow those.
 */
 func Run(prog string, args []string) (int, error) {
 	cmd := exec.Command(prog, args...)
@@ -462,5 +462,24 @@ func Verboseln(s ...interface{}) {
 func Verbosef(f string, a ...interface{}) {
 	if *verbose_flag {
 		fmt.Printf(f, a...)
+	}
+}
+
+func Symlink(target string, link string) {
+	_, err := os.Stat(link)
+	if os.IsNotExist(err) {
+		err = os.Symlink(target, link)
+		if err != nil {
+			le := err.(*os.LinkError)
+			wd, _ := os.Getwd()
+			log.Fatalf("Fatal - In '%s' cannot create symlink %s <---> %s", wd, le.Old, le.New)
+		}
+	} else {
+		wd, _ := os.Getwd()
+		fi, _ := os.Lstat(link)
+		if fi.Mode()&fs.ModeSymlink == 0 {
+			log.Fatalf("Fatal - In '%s'. '%s' already exists and is not a symlink to '%s'", wd, link, target)
+		}
+		Verbosef("In '%s'. Link already exists '%s' <---> '%s\n", wd, link, target)
 	}
 }
