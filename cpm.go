@@ -108,7 +108,7 @@ func main() {
   Valid options are:
     -b <branch name>          	checkout specific branch
     -f                        	fetch-only (no build)
-    -l                        	local-only (no pull)
+    -l                        	local-only (no fetch/pull)
     --root <dir> (or -r <dir>)  set root of development tree
     --uri <uri> (or -u <uri>) 	URI of root package
     --proto [git|https]       	preferred download protocol
@@ -286,12 +286,12 @@ func fetch_all(p *PacUnit) {
 			if len(dep.Modules) != 0 {
 				for _, m := range dep.Modules {
 					target = filepath.Join(devroot, dep.Name, "include", m)
-					Verbosef("In %s creating symlink %s --> %s\n", cwd, target, m)
+					Verbosef("In '%s' - creating symlink %s --> %s\n", cwd, target, m)
 					Symlink(target, m)
 				}
 			} else {
 				target = filepath.Join(devroot, dep.Name, "include", dep.Name)
-				Verbosef("In %s creating symlink %s --> %[3]s\n", cwd, target, dep.Name)
+				Verbosef("In '%s' - creating symlink %s --> %[3]s\n", cwd, target, dep.Name)
 				Symlink(target, dep.Name)
 			}
 		}
@@ -465,21 +465,29 @@ func Verbosef(f string, a ...interface{}) {
 	}
 }
 
+// Create cymbolic link
+// 	target - destination
+//	link   - symlinc name
 func Symlink(target string, link string) {
-	_, err := os.Stat(link)
-	if os.IsNotExist(err) {
+	wd, _ := os.Getwd()
+	
+	if _, err := os.Stat(link); os.IsNotExist(err) {
 		err = os.Symlink(target, link)
 		if err != nil {
 			le := err.(*os.LinkError)
-			wd, _ := os.Getwd()
-			log.Fatalf("Fatal - In '%s' cannot create symlink %s <---> %s", wd, le.Old, le.New)
+			log.Fatalf("Fatal - In '%s' - cannot create symlink %s <---> %s", wd, le.Old, le.New)
 		}
-	} else {
-		wd, _ := os.Getwd()
-		fi, _ := os.Lstat(link)
-		if fi.Mode()&fs.ModeSymlink == 0 {
-			log.Fatalf("Fatal - In '%s'. '%s' already exists and is not a symlink to '%s'", wd, link, target)
+	} else {	
+		link_stat, _ := os.Lstat(link);
+		tgt_stat, _ := os.Stat(target)
+		if link_stat.Mode()&fs.ModeSymlink == 0 {
+			log.Fatalf("Fatal - In '%s' - '%s' already exists and is not a symlink to '%s'", wd, link, target)
 		}
-		Verbosef("In '%s'. Link already exists '%s' <---> '%s\n", wd, link, target)
+		link_stat, err = os.Stat(link)
+		if  !os.SameFile(link_stat, tgt_stat) {
+			log.Fatalf("Fatal - In '%s' - '%s' already exists and is not a symlink to '%s'", wd, link, target)
+		}
+
+		Verbosef("In '%s' - link already exists '%s' <---> '%s\n", wd, link, target)
 	}
 }
