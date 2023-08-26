@@ -3,7 +3,6 @@
 - [1. A Basic Example](#1-a-basic-example)
 - [2. Code Layout Rules](#2-code-layout-rules)
   - [2.1. Multi-module library packages](#21-multi-module-library-packages)
-- [Note that a library package with multiple modules still has only one binary `.lib` (or `.a`) file.](#note-that-a-library-package-with-multiple-modules-still-has-only-one-binary-lib-or-a-file)
   - [2.2. Weak Dependencies](#22-weak-dependencies)
   - [2.3. Compatibility with other code layout schemes](#23-compatibility-with-other-code-layout-schemes)
 - [3. Installation](#3-installation)
