@@ -3,12 +3,17 @@
 - [1. A Basic Example](#1-a-basic-example)
 - [2. Code Layout Rules](#2-code-layout-rules)
   - [2.1. Multi-module library packages](#21-multi-module-library-packages)
+- [Note that a library package with multiple modules still has only one binary `.lib` (or `.a`) file.](#note-that-a-library-package-with-multiple-modules-still-has-only-one-binary-lib-or-a-file)
   - [2.2. Weak Dependencies](#22-weak-dependencies)
   - [2.3. Compatibility with other code layout schemes](#23-compatibility-with-other-code-layout-schemes)
 - [3. Installation](#3-installation)
 - [4. Usage](#4-usage)
 - [5. Semantics of CPM.JSON file](#5-semantics-of-cpmjson-file)
 - [6. Operation](#6-operation)
+  - [6.1 Clone/Fetch](#61-clonefetch)
+  - [6.2 Create Symlinks](#62-create-symlinks)
+  - [6.3 Build](#63-build)
+  - [6.4 Post-build Commands](#64-post-build-commands)
 - [7. Proving Ground](#7-proving-ground)
 - [8. Integration with GitHub actions](#8-integration-with-github-actions)
      
@@ -185,6 +190,7 @@ Valid options are:
 
 
 ## 5. Semantics of CPM.JSON file ##
+Following is a list of attributes that are recognized in the JSON file. Unknown attributes are silently ignored.
 |Level | Attribute   | Value  | Semantics |
 |------|-------------|--------|-----------|
 | 1    | `name`      | string | Name of package |
@@ -199,15 +205,39 @@ Valid options are:
 | 2    | `git`       | string | URL for downloading dependent package using _git_ protocol |
 | 2    | `https`     | string | URL for downloading dependent package using _https_ protocol |
 | 2    | `modules`   | array  | Module names for packages with multiple modules |
-| 2    | `fetchOnly` | bool   | Weak dependency (see below) |
+| 2    | `fetchOnly` | bool   | Weak dependency (see [Weak Dependencies](#22-weak-dependencies)) |
+| 2    | `post`      | array  | Post build commands (see below) |
 
-## 6. Operation ##
-CPM reads the CPM.JSON file in the selected folder and, for each dependent package, it checks if the project folder exists. If not, it issues a `git clone` command to bring the latest version. If you have selected a specific branch, CPM issues a `git switch ...` command to switch to that branch and then a `git pull ...` command to bring in the latest version of that branch.
+## 6. Operation
+CPM reads the `CPM.JSON`` file in the selected folder and follows thees steps.
 
-The next step is to build build each package by issuing the build commands appropriate for the OS environment. All commands that have an `os` attribute matching the current OS or without any `os` attribute are issued in order.
+### 6.1 Clone/Fetch
+For each dependent package, CPM checks if the project folder exists under the `DEV_ROOT` tree. If not, it issues a `git clone` command to bring the latest version. If you have selected a specific branch, CPM issues a `git switch ...` command to switch to that branch and then a `git pull ...` command to bring in the latest version of that branch.
+
+If CPM has been invoked with the `-l` command line switch, it skips this step.
+
+### 6.2 Create Symlinks
+CPM creates symlink to include directories of all dependent packages and to the main `lib` folder. If the symlinks already exist, it verifies they point to proper tareget.
+
+### 6.3 Build
+The next step is to build each package by issuing the build commands appropriate for the OS environment. The `build` attribute contains an array of commands used to build the package. Each command has the following structure:
+```JSON
+{"os": "<windows|linux|any>", "cmd": "command name", "args": ["arg1", "arg2", ...]}
+```
+All commands that have an `os` attribute matching the current OS or without any `os` attribute are issued in order. Arguments that contain an environmant variable using the syntax `${variable}` or `$variable` will be expanded.
+
+If CPM has been invoked with the `-f` command line switch, it skips this step.
+
+### 6.4 Post-build Commands
+Each dependency descriptor may contain an array of commands to be executed after a dependent package was built. Commands have the same structure as the build commands.
+
+If CPM has been invoked with the `-f` command line switch, it skips this step.
 
 ## 7. Proving Ground ##
 CPM can be tested using a [sample project](https://github.com/neacsum/example_super_app). To use it, follow these steps:
+
+<u>__For Windows__</u>
+
 1. Make sure you have installed Visual Studio 2017 or higher (preferably VS2022).
 2. Download [CPM](https://github.com/neacsum/cpm/releases/latest/download/cpm.exe) program and place it somewhere in the path
 3. Create a `devroot` folder:
@@ -224,10 +254,28 @@ c:\temp\devroot>git clone git@github.com:neacsum/example_super_app.git super_app
 ````
 c:\temp\devroot>cpm super_app
 ````
-If all goes well, you should have a file `c:\temp\devroot\super_app\build\app\x64\Debug\super_app.exe`. Also the directory `c:\temp\devroot\lib\x64\Debug` should contain the files
+If all goes well, you should have a file `c:\temp\devroot\super_app\build\bin\x64\Debug\super_app.exe`. Also the directory `c:\temp\devroot\lib\x64\Debug` should contain the files
 - `cool_A.lib`
 - `cool_B.lib`
 - `multi_mod.lib`
+
+<u>__For Linux__</u>
+1. Make sure you have gcc compiler installed. If not, `sudo apt install build-essential` should take care of that.
+2. Download [CPM](https://github.com/neacsum/cpm/releases/latest/download/cpm) program and place it somewhere in the path. This CPM program has no relation with the with the [Console Password Manager](https://github.com/comotion/cpm).
+3. Create a `devroot` folder:
+````
+$mkdir devroot
+$export DEV_ROOT=~/devroot
+$cd devroot
+````
+4. Clone the sample project:  
+````
+$git clone git@github.com:neacsum/example_super_app.git super_app
+````
+5. Run the CPM program:
+````
+$cpm super_app
+````
 
 ## 8. Integration with GitHub actions ##
 CPM can be integrated with GitHub actions. You only need to fetch the CPM program and run it. Below is an example pulled from the same proving ground application:
@@ -252,7 +300,7 @@ jobs:
     
     steps:      
       - name: Get CPM
-        uses: engineerd/configurator@v0.0.8
+        uses: engineerd/configurator@v0.0.10
         with:
           name: cpm.exe
           url: https://github.com/neacsum/cpm/releases/latest/download/cpm.exe

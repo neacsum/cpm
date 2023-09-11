@@ -43,13 +43,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
 
-const Version = "V0.5.5"
+const Version = "V0.6.0"
 
-type BuildCommands struct {
+type Command struct {
 	Os   string
 	Cmd  string
 	Args []string
@@ -61,6 +62,7 @@ type DependencyDescriptor struct {
 	Https     string
 	Modules   []string
 	FetchOnly bool
+	Post      []Command
 	pack      *PacUnit
 }
 
@@ -68,7 +70,7 @@ type PacUnit struct {
 	Name    string
 	Git     string
 	Https   string
-	Build   []BuildCommands
+	Build   []Command
 	Depends []DependencyDescriptor
 	built   bool
 }
@@ -206,7 +208,7 @@ func fetch(p *PacUnit) {
 
 	if _, err := os.Stat(pacdir); os.IsNotExist(err) {
 		//package directory doesn't exist; create it and clone repo
-		if err := os.Mkdir(pacdir, 0666); err != nil {
+		if err := os.Mkdir(pacdir, 0764); err != nil {
 			log.Fatalf("error %d - cannot create folder %s", err, pacdir)
 		}
 		git_clone(p)
@@ -323,6 +325,13 @@ func build(p *PacUnit) {
 		for _, d = range p.Depends {
 			if !d.FetchOnly {
 				build(d.pack)
+				if len(d.Post) != 0 {
+					Verboseln("Executing post commands...")
+					if ret, err := exec_commands(d.Post); ret != 0 {
+						log.Fatalf("Build aborted - %v\n", err)
+					}
+					Verboseln("...finished post commands")
+				}
 			} else {
 				Verbosef("Package %s - skipped build\n", d.Name)
 			}
@@ -331,33 +340,39 @@ func build(p *PacUnit) {
 	}
 
 	// then build self
-	if ret, err := do_build(p.Build); ret != 0 {
-		log.Fatalf("Build aborted - %v\n", err)
+	if len(p.Build) != 0 {
+		if ret, err := exec_commands(p.Build); ret != 0 {
+			log.Fatalf("Build aborted - %v\n", err)
+		}
+	} else {
+			Verboseln("No build command found!")	
 	}
+
 	inprocess = inprocess[:len(inprocess)-1]
 	p.built = true
 }
 
 /*
-Execute the appropriate build command for a package. If there is a specific
-command for the current OS envirnoment, use that one. Otherwise choose a
-generic one (os set to "any" or "")
+	Execute a list of commands.
+
+	Executes only commands that apply to current OS envirnoment or generic ones
+	(os set to "any" or "")
 */
-func do_build(commands []BuildCommands) (int, error) {
+func exec_commands(commands []Command) (int, error) {
 	var ret int
 	var err error
 
-	if len(commands) == 0 {
-		Verboseln("No build command found!")
-		return 0, nil
-	}
 	for _, c := range commands {
 		if c.Os == "" {
 			c.Os = "any"
 		}
 		if c.Os == "any" || c.Os == runtime.GOOS {
-			Verbosef("OS: %s cmd: %s %v\n", c.Os, c.Cmd, c.Args)
-			if ret, err = Run(c.Cmd, c.Args); ret != 0 {
+			var exparg []string
+			for _,a := range c.Args {
+				exparg = append(exparg, os.ExpandEnv(a))
+			}
+			Verbosef("OS: %s cmd: %s %v\n", c.Os, c.Cmd, exparg)
+			if ret, err = Run(c.Cmd, exparg); ret != 0 {
 				return ret, err
 			}
 		}
@@ -365,12 +380,20 @@ func do_build(commands []BuildCommands) (int, error) {
 	return ret, err
 }
 
-/*
-Run a program with arguments.
+//Builtin CMD commands executed by spawning a CMD instance
+var cmd_builtins = [...]string {"attrib", "copy", "del", "echo", "md", "mkdir", "mklink", "rd", "ren", "rename", "replace", "rmdir" };
 
-GO 1.19 oesn't allow relative paths. Here however we allow those.
+/*
+	Run a program with arguments.
+	GO 1.19 doesn't allow relative paths. Here however we allow those.
 */
 func Run(prog string, args []string) (int, error) {
+	
+	if runtime.GOOS == "windows" && slices.Contains(cmd_builtins[:], strings.ToLower(prog)) {
+		args = slices.Insert(args, 0, "/c");
+		args = slices.Insert(args, 1, prog);
+		prog = "cmd";
+	}
 	cmd := exec.Command(prog, args...)
 	if errors.Is(cmd.Err, exec.ErrDot) && runtime.GOOS == "windows" {
 		cmd.Err = nil
@@ -465,9 +488,9 @@ func Verbosef(f string, a ...interface{}) {
 	}
 }
 
-// Create cymbolic link
+// Create symbolic link
 // 	target - destination
-//	link   - symlinc name
+//	link   - symlink name
 func Symlink(target string, link string) {
 	wd, _ := os.Getwd()
 	
