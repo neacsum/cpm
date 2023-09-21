@@ -16,7 +16,7 @@ package main
   directory.
 
   Valid options are:
-    -b <branch name> switches to specific branch
+    -b <branch name> switches to specific branch or tag
     -F discards local changes when switching branches
     -f fetch-only (do not build)
     -l local-only (do not pull)
@@ -51,14 +51,15 @@ import (
 const Version = "V0.6.0"
 
 type Command struct {
-	Os   string
-	Cmd  string
-	Args []string
+	Os   			string
+	Cmd  			string
+	Args 			[]string
 }
 
 type DependencyDescriptor struct {
 	Name      string
 	Git       string
+	Branch    string	
 	Https     string
 	Modules   []string
 	FetchOnly bool
@@ -67,12 +68,13 @@ type DependencyDescriptor struct {
 }
 
 type PacUnit struct {
-	Name    string
-	Git     string
-	Https   string
-	Build   []Command
-	Depends []DependencyDescriptor
-	built   bool
+	Name    	string
+	Git     	string
+	Branch		string	
+	Https   	string
+	Build   	[]Command
+	Depends 	[]DependencyDescriptor
+	built   	bool
 }
 
 var devroot string         //root of development tree
@@ -108,7 +110,8 @@ func main() {
         
   If package is not specified, it is assumed to be the current directory.
   Valid options are:
-    -b <branch name>          	checkout specific branch
+    -b <branch name>          	checkout specific branch or tag
+		-F                          discards local changes when switching branches
     -f                        	fetch-only (no build)
     -l                        	local-only (no fetch/pull)
     --root <dir> (or -r <dir>)  set root of development tree
@@ -134,7 +137,13 @@ func main() {
 	if devroot == "" {
 		log.Fatal("No development tree root specified and environment variable  DEV_ROOT is not set")
 	}
-	devroot, _ = filepath.Abs(devroot)
+
+	if !filepath.IsAbs(devroot) {
+		//make DEV_ROOT relative to HOME
+		home,_ := os.UserHomeDir()
+		devroot = filepath.Join(home, devroot)
+	}
+	Verboseln("DEV_ROOT=", devroot)
 
 	var root_name string
 	if flag.NArg() > 0 {
@@ -155,11 +164,11 @@ func main() {
 		root_descriptor = filepath.Join(cwd, descriptor_name)
 	}
 
-	Verboseln("DEV_ROOT=", devroot)
 	Verboseln("Top descriptor is ", root_descriptor)
 	os.Mkdir(filepath.Join(devroot, "lib"), 0755)
 
 	root := new(PacUnit)
+	root.Branch = *branch_flag
 	all_packs = append(all_packs, root)
 
 	if root_uri != "" {
@@ -220,7 +229,7 @@ func fetch(p *PacUnit) {
 	} else {
 		//repo exists; just pull latest version
 		os.Chdir(pacdir)
-		git_pull(pacdir)
+		git_pull(p.Branch)
 	}
 }
 
@@ -235,7 +244,11 @@ func fetch_all(p *PacUnit) {
 		}
 	}
 	cwd, _ := os.Getwd()
-	Verbosef("Setting up %s in %s\n", p.Name, cwd)
+	if len(p.Branch) == 0 {
+		Verbosef("Setting up %s in %s\n", p.Name, cwd)
+	} else {
+		Verbosef("Setting up %s@%s in %s\n", p.Name, p.Branch, cwd)
+	}
 
 	Symlink(filepath.Join(devroot, "lib"), "lib")
 
@@ -258,6 +271,17 @@ func fetch_all(p *PacUnit) {
 			found := false
 			for idx, v = range all_packs {
 				if v.Name == p.Depends[i].Name {
+					if v.Branch != p.Depends[i].Branch {
+						b1 := v.Branch
+						if len(b1) == 0 {
+							b1 = "HEAD"
+						}
+						b2 := p.Depends[i].Branch
+						if len(b2) == 0 {
+							b2 = "HEAD"
+						}
+						log.Fatalf("Package %s - cannot switch to %s branch. Branch %s has already been configured", v.Name, b1, b2)
+					}
 					found = true
 					break
 				}
@@ -265,10 +289,11 @@ func fetch_all(p *PacUnit) {
 			if !found {
 				//add new package
 				d := new(PacUnit)
-				all_packs = append(all_packs, d)
 				d.Name = p.Depends[i].Name
 				d.Git = p.Depends[i].Git
 				d.Https = p.Depends[i].Https
+				d.Branch = p.Depends[i].Branch
+				all_packs = append(all_packs, d)
 				fetch_all(d)
 				p.Depends[i].pack = d
 			} else {
@@ -436,8 +461,8 @@ func git_clone(p *PacUnit) {
 	//Build git command
 	var args []string
 	args = append(args, "clone")
-	if *branch_flag != "" {
-		args = append(args, "-b", *branch_flag)
+	if p.Branch != "" {
+		args = append(args, "-b", p.Branch)
 	}
 	args = append(args, uri, fullpath)
 	Verboseln("git ", args)
@@ -450,27 +475,31 @@ func git_clone(p *PacUnit) {
 
 // Pull latest version from repo.
 // If branch is not empty, stwitches to that branch
-func git_pull(dir string) {
+func git_pull(branch string) {
 	var args []string
 
-	if len(*branch_flag) != 0 {
-		Verbosef("In %s - Switching to: %s\n", dir, *branch_flag)
-		args = append(args, "switch")
-		if *force_flag {
-			args = append(args, "-f")
-		}
-		args = append(args, *branch_flag)
-		Verboseln("In", dir, "- git", args)
-		if stat, err := Run("git", args); err != nil || stat != 0 {
-			log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", *branch_flag, stat, err)
-		}
+	if len(branch) != 0 {
+		git_switch(branch)
 	}
-	args = nil
 	args = append(args, "pull", "origin")
-	args = append(args, *branch_flag)
-	Verboseln("In", dir, "- git ", args)
+	args = append(args, branch)
+	Verboseln("Running git ", args)
 	if stat, err := Run("git", args); err != nil || stat != 0 {
 		log.Fatalf("Pulling failed \nStatus %d Error: %v\n", stat, err)
+	}
+}
+
+func git_switch (branch string) {
+	var args []string
+
+	args = append(args, "switch")
+	if *force_flag {
+		args = append(args, "-f")
+	}
+	args = append(args, branch)
+	Verboseln("Running git ", args)
+	if stat, err := Run("git", args); err != nil || stat != 0 {
+		log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", *branch_flag, stat, err)
 	}
 }
 
@@ -506,7 +535,7 @@ func Symlink(target string, link string) {
 		if link_stat.Mode()&fs.ModeSymlink == 0 {
 			log.Fatalf("Fatal - In '%s' - '%s' already exists and is not a symlink to '%s'", wd, link, target)
 		}
-		link_stat, err = os.Stat(link)
+		link_stat, _ = os.Stat(link)
 		if  !os.SameFile(link_stat, tgt_stat) {
 			log.Fatalf("Fatal - In '%s' - '%s' already exists and is not a symlink to '%s'", wd, link, target)
 		}
