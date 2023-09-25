@@ -138,10 +138,8 @@ func main() {
 		log.Fatal("No development tree root specified and environment variable  DEV_ROOT is not set")
 	}
 
-	if !filepath.IsAbs(devroot) {
-		//make DEV_ROOT relative to HOME
-		home,_ := os.UserHomeDir()
-		devroot = filepath.Join(home, devroot)
+	if devroot, err = filepath.Abs(devroot); err != nil {
+		log.Fatalf("Cannot find DEV_ROOT path: %s", err.Error())
 	}
 	Verboseln("DEV_ROOT=", devroot)
 
@@ -173,7 +171,11 @@ func main() {
 
 	if root_uri != "" {
 		//fetch root package
-		root.Git = root_uri
+		if *proto_flag == "git" {
+			root.Git = root_uri
+		} else {
+			root.Https = root_uri
+		}
 		root.Name = root_name
 		fetch(root)
 	}

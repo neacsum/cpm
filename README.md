@@ -204,6 +204,7 @@ Following is a list of attributes that are recognized in the JSON file. Unknown 
 | 2    | `name`      | string | Name of dependent package |
 | 2    | `git`       | string | URL for downloading dependent package using _git_ protocol |
 | 2    | `https`     | string | URL for downloading dependent package using _https_ protocol |
+| 2    | `branch`    | string | Git branch to use for dependent package |
 | 2    | `modules`   | array  | Module names for packages with multiple modules |
 | 2    | `fetchOnly` | bool   | Weak dependency (see [Weak Dependencies](#22-weak-dependencies)) |
 | 2    | `post`      | array  | Post build commands (see below) |
@@ -246,13 +247,9 @@ c:\temp>mkdir devroot
 c:\temp>set DEV_ROOT=c:temp\devroot
 c:\temp>cd devroot
 ````
-4. Clone the sample project:  
+4. Run the CPM program:
 ````
-c:\temp\devroot>git clone git@github.com:neacsum/example_super_app.git super_app
-````
-5. Run the CPM program:
-````
-c:\temp\devroot>cpm super_app
+c:\temp\devroot>cpm -u git@github.com:neacsum/example_super_app.git super_app
 ````
 If all goes well, you should have a file `c:\temp\devroot\super_app\build\bin\x64\Debug\super_app.exe`. Also the directory `c:\temp\devroot\lib\x64\Debug` should contain the files
 - `cool_A.lib`
@@ -265,16 +262,12 @@ If all goes well, you should have a file `c:\temp\devroot\super_app\build\bin\x6
 3. Create a `devroot` folder:
 ````
 $mkdir devroot
-$export DEV_ROOT=~/devroot
+$export DEV_ROOT=devroot
 $cd devroot
 ````
-4. Clone the sample project:  
+4. Run the CPM program:
 ````
-$git clone git@github.com:neacsum/example_super_app.git super_app
-````
-5. Run the CPM program:
-````
-$cpm super_app
+$cpm -u git@github.com:neacsum/example_super_app.git super_app
 ````
 
 ## 8. Integration with GitHub actions ##
