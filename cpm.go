@@ -48,7 +48,7 @@ import (
 	"time"
 )
 
-const Version = "V0.6.0"
+const Version = "V0.6.1"
 
 type Command struct {
 	Os   			string
@@ -139,9 +139,10 @@ func main() {
 	}
 
 	if !filepath.IsAbs(devroot) {
-		//make DEV_ROOT relative to HOME
-		home,_ := os.UserHomeDir()
-		devroot = filepath.Join(home, devroot)
+		devroot, err = filepath.Abs(devroot)
+		if err != nil {
+			log.Fatalf("Cannot find DEV_ROOT absolute path DEV_ROOT=%s - %s", devroot, err.Error())
+		}
 	}
 	Verboseln("DEV_ROOT=", devroot)
 
