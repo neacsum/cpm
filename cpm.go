@@ -48,7 +48,7 @@ import (
 	"time"
 )
 
-const Version = "V0.6.1"
+const Version = "V0.6.2"
 
 type Command struct {
 	Os   			string
@@ -135,7 +135,8 @@ func main() {
 	}
 
 	if devroot == "" {
-		log.Fatal("No development tree root specified and environment variable  DEV_ROOT is not set")
+		devroot,_ = os.Getwd()
+		fmt.Printf("No development tree root specified. Using current directory %s\n", devroot)
 	}
 
 	if !filepath.IsAbs(devroot) {
