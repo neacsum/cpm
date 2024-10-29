@@ -197,7 +197,7 @@ Following is a list of attributes that are recognized in the JSON file. Unknown 
 | 1    | `git`       | string | Download URL for the package using _git_ protocol |
 | 1    | `https`     | string | Download URL for the package using _https_ protocol |
 | 1    | `build`     | array  | Commands to be issued for building the package. |
-| 2    | `os`        | string | OS to which the build command applies |
+| 2    | `os`        | string | OS-es to which the build command applies <br/>(multiple OS-es are space-separated). Ex: `"windows"`, `"linux darwin"`, `"any"`|
 | 2    | `command`   | string | Command issued for building the package |
 | 2    | `args`      | array  | Command arguments |
 | 1    | `depends`   | array  | Package dependencies |
