@@ -2,7 +2,7 @@ package main
 
 /*
   CPM - C/C++ Package Manager
-  (c) Mircea Neacsu 2021-2023
+  (c) Mircea Neacsu 2021-2024
 
   This tool uses simple JSON files to manage dependencies between
   different packages.
@@ -48,18 +48,18 @@ import (
 	"time"
 )
 
-const Version = "V0.6.1"
+const Version = "V0.6.2"
 
 type Command struct {
-	Os   			string
-	Cmd  			string
-	Args 			[]string
+	Os   string
+	Cmd  string
+	Args []string
 }
 
 type DependencyDescriptor struct {
 	Name      string
 	Git       string
-	Branch    string	
+	Branch    string
 	Https     string
 	Modules   []string
 	FetchOnly bool
@@ -68,13 +68,13 @@ type DependencyDescriptor struct {
 }
 
 type PacUnit struct {
-	Name    	string
-	Git     	string
-	Branch		string	
-	Https   	string
-	Build   	[]Command
-	Depends 	[]DependencyDescriptor
-	built   	bool
+	Name    string
+	Git     string
+	Branch  string
+	Https   string
+	Build   []Command
+	Depends []DependencyDescriptor
+	built   bool
 }
 
 var devroot string         //root of development tree
@@ -371,7 +371,7 @@ func build(p *PacUnit) {
 			log.Fatalf("Build aborted - %v\n", err)
 		}
 	} else {
-			Verboseln("No build command found!")	
+		Verboseln("No build command found!")
 	}
 
 	inprocess = inprocess[:len(inprocess)-1]
@@ -379,10 +379,10 @@ func build(p *PacUnit) {
 }
 
 /*
-	Execute a list of commands.
+Execute a list of commands.
 
-	Executes only commands that apply to current OS envirnoment or generic ones
-	(os set to "any" or "")
+Executes only commands that apply to current OS envirnoment or generic ones
+(os set to "any" or "")
 */
 func exec_commands(commands []Command) (int, error) {
 	var ret int
@@ -392,33 +392,36 @@ func exec_commands(commands []Command) (int, error) {
 		if c.Os == "" {
 			c.Os = "any"
 		}
-		if c.Os == "any" || c.Os == runtime.GOOS {
-			var exparg []string
-			for _,a := range c.Args {
-				exparg = append(exparg, os.ExpandEnv(a))
-			}
-			Verbosef("OS: %s cmd: %s %v\n", c.Os, c.Cmd, exparg)
-			if ret, err = Run(c.Cmd, exparg); ret != 0 {
-				return ret, err
+		oses := strings.Fields(c.Os)
+		for _, an_os := range oses {
+			if an_os == "any" || an_os == runtime.GOOS {
+				var exparg []string
+				for _, a := range c.Args {
+					exparg = append(exparg, os.ExpandEnv(a))
+				}
+				Verbosef("OS: %s cmd: %s %v\n", an_os, c.Cmd, exparg)
+				if ret, err = Run(c.Cmd, exparg); ret != 0 {
+					return ret, err
+				}
 			}
 		}
 	}
 	return ret, err
 }
 
-//Builtin CMD commands executed by spawning a CMD instance
-var cmd_builtins = [...]string {"attrib", "copy", "del", "echo", "md", "mkdir", "mklink", "rd", "ren", "rename", "replace", "rmdir" };
+// Builtin CMD commands executed by spawning a CMD instance
+var cmd_builtins = [...]string{"attrib", "copy", "del", "echo", "md", "mkdir", "mklink", "rd", "ren", "rename", "replace", "rmdir"}
 
 /*
-	Run a program with arguments.
-	GO 1.19 doesn't allow relative paths. Here however we allow those.
+Run a program with arguments.
+GO 1.19 doesn't allow relative paths. Here however we allow those.
 */
 func Run(prog string, args []string) (int, error) {
-	
+
 	if runtime.GOOS == "windows" && slices.Contains(cmd_builtins[:], strings.ToLower(prog)) {
-		args = slices.Insert(args, 0, "/c");
-		args = slices.Insert(args, 1, prog);
-		prog = "cmd";
+		args = slices.Insert(args, 0, "/c")
+		args = slices.Insert(args, 1, prog)
+		prog = "cmd"
 	}
 	cmd := exec.Command(prog, args...)
 	if errors.Is(cmd.Err, exec.ErrDot) && runtime.GOOS == "windows" {
@@ -490,7 +493,7 @@ func git_pull(branch string) {
 	}
 }
 
-func git_switch (branch string) {
+func git_switch(branch string) {
 	var args []string
 
 	args = append(args, "switch")
@@ -519,25 +522,26 @@ func Verbosef(f string, a ...interface{}) {
 }
 
 // Create symbolic link
-// 	target - destination
+//
+//	target - destination
 //	link   - symlink name
 func Symlink(target string, link string) {
 	wd, _ := os.Getwd()
-	
+
 	if _, err := os.Stat(link); os.IsNotExist(err) {
 		err = os.Symlink(target, link)
 		if err != nil {
 			le := err.(*os.LinkError)
 			log.Fatalf("Fatal - In '%s' - cannot create symlink %s <---> %s", wd, le.Old, le.New)
 		}
-	} else {	
-		link_stat, _ := os.Lstat(link);
+	} else {
+		link_stat, _ := os.Lstat(link)
 		tgt_stat, _ := os.Stat(target)
 		if link_stat.Mode()&fs.ModeSymlink == 0 {
 			log.Fatalf("Fatal - In '%s' - '%s' already exists and is not a symlink to '%s'", wd, link, target)
 		}
 		link_stat, _ = os.Stat(link)
-		if  !os.SameFile(link_stat, tgt_stat) {
+		if !os.SameFile(link_stat, tgt_stat) {
 			log.Fatalf("Fatal - In '%s' - '%s' already exists and is not a symlink to '%s'", wd, link, target)
 		}
 
