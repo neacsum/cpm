@@ -48,7 +48,7 @@ import (
 	"time"
 )
 
-const Version = "V0.6.2"
+const Version = "V0.7.0"
 
 type Command struct {
 	Os   string
@@ -147,25 +147,30 @@ func main() {
 	}
 	Verboseln("DEV_ROOT=", devroot)
 
-	var root_name string
+	var root_name, root_dir string
 	if flag.NArg() > 0 {
-		dir := ""
+		root_dir = ""
 		//root package specified on command line
 		if !strings.ContainsAny(flag.Arg(0), "\\/") {
 			//only a relative path - use DEVROOT as path
 			root_name = flag.Arg(0)
-			dir = devroot
+			root_dir = devroot
 		} else {
-			_, root_name = filepath.Split(flag.Arg(0))
+			root_dir, root_name = filepath.Split(flag.Arg(0))
 		}
-		root_descriptor = filepath.Join(dir, root_name, descriptor_name)
 	} else {
-		//assume root package is in current folder
+		//no package on command line - assume root package is in current folder
 		cwd, _ := os.Getwd()
-		_, root_name = filepath.Split(cwd)
-		root_descriptor = filepath.Join(cwd, descriptor_name)
+		root_dir, root_name = filepath.Split(cwd)
 	}
 
+	fi_dir,_ := os.Stat(root_dir)
+	fi_devroot, _ :=os.Stat(devroot)
+	if !os.SameFile(fi_dir, fi_devroot) {
+		log.Fatalf ("Root package directory '%s' is outside of DEV_ROOT directory '%s'", filepath.Join(root_dir, root_name), devroot)
+	}
+
+	root_descriptor = filepath.Join(root_dir, root_name, descriptor_name)
 	Verboseln("Top descriptor is ", root_descriptor)
 	os.Mkdir(filepath.Join(devroot, "lib"), 0755)
 
@@ -190,8 +195,11 @@ func main() {
 	}
 
 	if root_name != "" && !strings.EqualFold(root.Name, root_name) {
-		fmt.Printf("WARNING specifed package directory '%s' does not match descriptor's package name (%s)\n", root_name, root.Name)
+		fmt.Printf("WARNING specified package directory '%s' does not match descriptor's package name (%s)\n", root_name, root.Name)
 		root.Name = root_name
+	}
+	if (root_uri != "") {
+		root.Git = root_uri
 	}
 	os.Chdir(filepath.Join(devroot, root.Name))
 
@@ -204,7 +212,7 @@ func main() {
 		inprocess = make([]string, 0, 10)
 		if root_name != "" && !strings.EqualFold(root.Name, root_name) {
 			//Descriptor parsing has changed the root name from what user wants.
-			//Resore it now.
+			//Restore it now.
 			root.Name = root_name
 		}
 		build(root)
@@ -327,7 +335,7 @@ func fetch_all(p *PacUnit) {
 	}
 }
 
-// Build a packge after first having built its dependents
+// Build a package after first having built its dependents
 func build(p *PacUnit) {
 	if p.built {
 		Verboseln("Package", p.Name, "has already been built")
@@ -339,7 +347,7 @@ func build(p *PacUnit) {
 		}
 	}
 
-	//keep track of packeges that are in process to avoid dependency cycles
+	//keep track of packages that are in process to avoid dependency cycles
 	inprocess = append(inprocess, p.Name)
 	pacdir := filepath.Join(devroot, p.Name)
 	os.Chdir(pacdir) //that should be ok. Package has been fetched already
@@ -382,7 +390,7 @@ func build(p *PacUnit) {
 /*
 Execute a list of commands.
 
-Executes only commands that apply to current OS envirnoment or generic ones
+Executes only commands that apply to current OS environment or generic ones
 (os set to "any" or "")
 */
 func exec_commands(commands []Command) (int, error) {
@@ -479,7 +487,7 @@ func git_clone(p *PacUnit) {
 }
 
 // Pull latest version from repo.
-// If branch is not empty, stwitches to that branch
+// If branch is not empty, switches to that branch
 func git_pull(branch string) {
 	var args []string
 
