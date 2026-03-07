@@ -37,6 +37,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -233,13 +234,15 @@ func fetch(p *PacUnit) {
 		git_clone(p)
 		os.Chdir(pacdir)
 	} else if _, err := os.Stat(filepath.Join(pacdir, ".git")); os.IsNotExist(err) {
-		//package directory exists but no git repo here; clone repo
+		if empty,_ := IsEmptyDir(pacdir); !empty {
+			log.Fatalf("Cannot clone %s package. Directory exists and is not a empty", p.Name)
+		}
+		//empty directory exists; clone repo
 		git_clone(p)
 		os.Chdir(pacdir)
 	} else {
-		//repo exists; just pull latest version
 		os.Chdir(pacdir)
-		git_pull(p.Branch)
+		git_pull(p)
 	}
 }
 
@@ -409,7 +412,7 @@ func exec_commands(commands []Command) (int, error) {
 					exparg = append(exparg, os.ExpandEnv(a))
 				}
 				Verbosef("OS: %s cmd: %s %v\n", an_os, c.Cmd, exparg)
-				if ret, err = Run(c.Cmd, exparg); ret != 0 {
+				if ret, err = Run(c.Cmd, exparg, nil); ret != 0 {
 					return ret, err
 				}
 			}
@@ -425,7 +428,7 @@ var cmd_builtins = [...]string{"attrib", "copy", "del", "echo", "md", "mkdir", "
 Run a program with arguments.
 GO 1.19 doesn't allow relative paths. Here however we allow those.
 */
-func Run(prog string, args []string) (int, error) {
+func Run(prog string, args []string, out io.Writer) (int, error) {
 
 	if runtime.GOOS == "windows" && slices.Contains(cmd_builtins[:], strings.ToLower(prog)) {
 		args = slices.Insert(args, 0, "/c")
@@ -436,7 +439,11 @@ func Run(prog string, args []string) (int, error) {
 	if errors.Is(cmd.Err, exec.ErrDot) && runtime.GOOS == "windows" {
 		cmd.Err = nil
 	}
-	cmd.Stdout = os.Stdout
+	if out != nil {
+		cmd.Stdout = out
+	} else {
+		cmd.Stdout = os.Stdout
+	}
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	if err := cmd.Run(); err != nil {
@@ -481,23 +488,23 @@ func git_clone(p *PacUnit) {
 	Verboseln("git ", args)
 
 	//Clone
-	if stat, err := Run("git", args); err != nil || stat != 0 {
+	if stat, err := Run("git", args, nil); err != nil || stat != 0 {
 		log.Fatalf("Cloning failed \nStatus %d Error: %v\n", stat, err)
 	}
 }
 
 // Pull latest version from repo.
 // If branch is not empty, switches to that branch
-func git_pull(branch string) {
-	var args []string
-
-	if len(branch) != 0 {
-		git_switch(branch)
+func git_pull(p *PacUnit) {
+	if len(p.Branch) != 0 {
+		git_switch(p.Branch)
 	}
-	args = append(args, "pull", "origin")
-	args = append(args, branch)
-	Verboseln("Running git ", args)
-	if stat, err := Run("git", args); err != nil || stat != 0 {
+	
+	var orig strings.Builder
+	Run ("git", []string{"config", "--get", "remote.origin.url"}, &orig)
+	Verbosef("Package %s pulling from %s", p.Name, orig.String())
+
+	if stat, err := Run("git", []string{ "pull", "origin"}, nil); err != nil || stat != 0 {
 		log.Fatalf("Pulling failed \nStatus %d Error: %v\n", stat, err)
 	}
 }
@@ -511,7 +518,7 @@ func git_switch(branch string) {
 	}
 	args = append(args, branch)
 	Verboseln("Running git ", args)
-	if stat, err := Run("git", args); err != nil || stat != 0 {
+	if stat, err := Run("git", args, nil); err != nil || stat != 0 {
 		log.Fatalf("Switching to branch %s failed \nStatus %d Error: %v\n", *branch_flag, stat, err)
 	}
 }
@@ -556,4 +563,19 @@ func Symlink(target string, link string) {
 
 		Verbosef("In '%s' - link already exists '%s' <---> '%s\n", wd, link, target)
 	}
+}
+
+// Return `true` if a directory is empty
+func IsEmptyDir(name string) (bool, error) {
+    f, err := os.Open(name)
+    if err != nil {
+        return false, err
+    }
+    defer f.Close()
+
+    _, err = f.Readdirnames(1)
+    if err == io.EOF {
+        return true, nil
+    }
+    return false, err // Either not empty or error, suits both cases
 }
