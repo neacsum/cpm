@@ -16,6 +16,7 @@
   - [6.4 Post-build Commands](#64-post-build-commands)
 - [7. Proving Ground](#7-proving-ground)
 - [8. Integration with GitHub actions](#8-integration-with-github-actions)
+- [9. Choosing DEV\_ROOT location](#9-choosing-dev_root-location)
      
 CPM is a tool that helps coordinate work between multiple repositories. All you need is a simple JSON file to describe dependencies between repositories. This, together with the magic of symbolic links helps maintain a consistent environment for multiple libraries.
 
@@ -121,7 +122,7 @@ Sometimes, a library may contain more than one group of files. For instance a co
  Inside the library, the headers can be referenced as:
 ```C++
 #include <serial/stuff.h>
-#include <bluetooh/other_stuff.h>
+#include <bluetooth/other_stuff.h>
 ```
 If a dependent package wants to include only one module of the library, it can use the `modules` attribute in the dependency descriptor.
 
@@ -154,7 +155,7 @@ Sometimes it may happen that two modules are interdependent. For instance `cool_
 In such cases, CPM has to fetch the packages and create the symbolic links but should not initiate the build process of `cool_B` as part of the build process for `cool_A`. These situations are called *weak dependencies* and are flagged by the `fetchOnly` flag in the CPM.JSON file.
 
 ### 2.3. Compatibility with other code layout schemes ###
-The layout required by CPM is simple and, as such, very compatible with other layout recommendations. My personal favorite is [The Pitchfork Layout](https://api.csswg.org/bikeshed/?force=1&url=https://raw.githubusercontent.com/vector-of-bool/pitchfork/spec/data/spec.bs). Note however the following differences:
+The layout required by CPM is simple and, as such, very compatible with other layout recommendations. My personal favorite is [The Pitchfork Layout](https://joholl.github.io/pitchfork-website/). Note however the following differences:
 - PFL does not describe any mechanism for cooperation between different packages. The symbolic links mechanism described in this document is specific to CPM.
 - PFL does not use a shared `lib/` directory. The PFL `libs/` folder is used for a different purpose.
 
@@ -177,13 +178,12 @@ cpm version
 If `package` is not specified, it is assumed to be in the current directory.
 
 Valid options are:
-  - `-b <branch_name>` switches to a specific branch
+  - `-b <branch_name>` branch name of root package
   - `-F` discards local changes when switching branches (issues a `git switch -f ...` command)
   - `-f` fetch-only (no build)
   - `-l` local-only (no pull)
-  - `--proto [git | https]` preferred protocol for package cloning 
   - `--root <folder>` or `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
-  - `--uri <uri>` or `-u <uri>` set URI for fetching root package
+  - `--uri <uri>` or `-u <uri>` URI for fetching root package
   - `--version` show program version
   - `-v` verbose
   - `--help` or `-h` show usage information
@@ -194,31 +194,33 @@ Following is a list of attributes that are recognized in the JSON file. Unknown 
 |Level | Attribute   | Value  | Semantics |
 |------|-------------|--------|-----------|
 | 1    | `name`      | string | Name of package |
-| 1    | `git`       | string | Download URL for the package using _git_ protocol |
-| 1    | `https`     | string | Download URL for the package using _https_ protocol |
+| 1    | `uri`       | string | Download URI for the package |
 | 1    | `build`     | array  | Commands to be issued for building the package. |
 | 2    | `os`        | string | OS-es to which the build command applies <br/>(multiple OS-es are space-separated). Ex: `"windows"`, `"linux darwin"`, `"any"`|
 | 2    | `command`   | string | Command issued for building the package |
 | 2    | `args`      | array  | Command arguments |
 | 1    | `depends`   | array  | Package dependencies |
 | 2    | `name`      | string | Name of dependent package |
-| 2    | `git`       | string | URL for downloading dependent package using _git_ protocol |
-| 2    | `https`     | string | URL for downloading dependent package using _https_ protocol |
+| 2    | `uri`       | string | URI for downloading dependent package |
 | 2    | `branch`    | string | Git branch to use for dependent package |
 | 2    | `modules`   | array  | Module names for packages with multiple modules |
 | 2    | `fetchOnly` | bool   | Weak dependency (see [Weak Dependencies](#22-weak-dependencies)) |
 | 2    | `post`      | array  | Post build commands (see below) |
 
 ## 6. Operation
-CPM reads the `CPM.JSON`` file in the selected folder and follows these steps.
+If a package name has been specified on the command line, CPM looks for the directory `$DEV_ROOT/<package>`. If the directory does not exist, but an URI has been specified on the command line (the `--uri <uri>` option), it tries to fetch the top level package from the indicted URI. It then looks for the `CPM.JSON` file in the `$DEV_ROOT/<package>` directory and continues with the steps outlined below.
+
+If no top level package has been specified on the command line, CPM assumes the current directory contains the top level package and proceeds to look for the `CPM.JSON` file.
 
 ### 6.1 Clone/Fetch
-For each dependent package, CPM checks if the project folder exists under the `DEV_ROOT` tree. If not, it issues a `git clone` command to bring the latest version. If you have selected a specific branch, CPM issues a `git switch ...` command to switch to that branch and then a `git pull ...` command to bring in the latest version of that branch.
+For each dependent package, CPM checks if the project folder exists under the `DEV_ROOT` tree. If not, it issues a `git clone` command to bring the latest version of the main branch or a specific branch if specified on the command line (the `-b` command line switch).
+
+If the repository already exists, CPM issues a `git pull ...` or a `git switch ...` command to bring in the latest version of the main branch or the requested branch.
 
 If CPM has been invoked with the `-l` command line switch, it skips this step.
 
 ### 6.2 Create Symlinks
-CPM creates symlink to include directories of all dependent packages and to the main `lib` folder. If the symlinks already exist, it verifies they point to proper target.
+CPM creates symlinks to include directories of all dependent packages and to the main `lib` folder. If the symlinks already exist, it verifies they point to proper target.
 
 ### 6.3 Build
 The next step is to build each package by issuing the build commands appropriate for the OS environment. The `build` attribute contains an array of commands used to build the package. Each command has the following structure:
@@ -302,11 +304,54 @@ jobs:
         run: git clone https://github.com/neacsum/example_super_app.git .\super_app
 
       - name: Build
-        run: cpm -v --proto https -r . super_app
+        run: cpm -v -r . super_app
         
       - name: Run app
         run: .\super_app\build\app\x64\Debug\super_app.exe
 ```
 It uses an action to [fetch](https://github.com/marketplace/actions/engineerd-configurator) the CPM executable, clones the repo to be built and invokes CPM to build it.
 
-Note that the CPM command specifies the `--proto https` option. Using HTTPS protocol bypasses user authentication problems.
+## 9. Choosing DEV_ROOT location
+As explained before, projects are laid out in a "flat" hierarchy of directories starting at `DEV_ROOT`. The `DEV_ROOT` directory can be specified either on command line (`-r` option) or through an environment variable.
+
+If `DEV_ROOT` is not set on command line or as an environment variable, CPM tries to find a reasonable location:
+- If the command line includes a URI for downloading the project, it assumes the current directory is going to be the root.
+  
+- If the command line includes a project name and a directory with the same name exists and is a child of current directory, the current directory is going to be the root.
+  
+- If there is no project name or uri specified on command line, but in the current directory there is a file `cpm.json`, CPM assumes that is the project to build and the parent of the current directory is the DEV_ROOT directory.
+
+The following flowchart summarizes these steps.
+
+```mermaid
+---
+config:
+  elk:
+    nodePlacementAlignment: LEFTDOWN
+---
+flowchart
+    A{DEV_ROOT set on command line?}
+    B{DEV_ROOT environment variable set?}
+    C{URI on command line?}
+    D{Project name on command line?}
+    F{Project directory exists an is child of current directory}
+    E{"` _cpm.json_ in current directory?`"}
+    G[Error]
+
+    A1[Use DEV_ROOT from command line]
+    B1[Use DEV_ROOT from environment]
+    C1[DEV_ROOT is current directory]
+    D1[DEV_ROOT is parent of current directory]
+    A ==> |No|B
+    A ==> |Yes| A1
+    B ==> |No| C
+    B ==> |Yes| B1
+    C ==> |No| D
+    C ==> |Yes| C1
+    D ==> |No| E
+    D ==> |Yes| F
+    F ==> |Yes| C1
+    F --> |No| G
+    E --> |No| G
+    E ==> |Yes| D1
+```
