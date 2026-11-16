@@ -50,7 +50,7 @@ import (
 	"time"
 )
 
-const Version = "V0.7.1"
+const Version = "V0.7.2"
 
 type Command struct {
 	Os   string
@@ -70,7 +70,7 @@ type DependencyDescriptor struct {
 
 type PacUnit struct {
 	Name    string
-	Uri     string
+	Origin  string
 	Branch  string
 	Build   []Command
 	Depends []DependencyDescriptor
@@ -201,7 +201,6 @@ func main() {
 	} else {
 		// No URI specified and no root package name on command line
 		// Assume there is a CPM descriptor file in current directory.
-		parse_descriptor(root)
 		rootdir,_ := os.Getwd()
 		dir, rdir := filepath.Split(rootdir)
 		stat1,_ := os.Stat(devroot)
@@ -209,6 +208,8 @@ func main() {
 		if (!os.SameFile(stat1, stat2)) {
 			log.Fatal("Current directory is not a child of DEV_ROOT")
 		}
+		git_pull(*branch_flag)
+		parse_descriptor(root)
 		root.Name = rdir
 	}
 
@@ -248,9 +249,6 @@ func parse_descriptor (p *PacUnit) {
 	}
 }
 
-func get_from_uri (uri string, p *PacUnit) {
-
-}
 /*
 	Clone root package from given URI
 	
@@ -290,7 +288,7 @@ func clone_root (uri string, root *PacUnit) {
 }
 
 // Fetch one package. Changes working directory to the package directory
-func fetch(p *PacUnit) {
+func fetch(p *PacUnit, uri string) {
 	pacdir := filepath.Join(devroot, p.Name)
 
 	if _, err := os.Stat(pacdir); os.IsNotExist(err) {
@@ -298,14 +296,14 @@ func fetch(p *PacUnit) {
 		if err := os.Mkdir(pacdir, 0755); err != nil {
 			log.Fatalf("error %d - cannot create folder %s", err, pacdir)
 		}
-		git_clone_package(p)
+		git_clone_package(p, uri)
 		os.Chdir(pacdir)
 	} else if _, err := os.Stat(filepath.Join(pacdir, ".git")); os.IsNotExist(err) {
 		if empty,_ := IsEmptyDir(pacdir); !empty {
 			log.Fatalf("Cannot clone %s package. Directory exists and is not empty", p.Name)
 		}
 		//empty directory exists; clone repo
-		git_clone_package(p)
+		git_clone_package(p, uri)
 		os.Chdir(pacdir)
 	} else {
 		//Repo is here. Pull latest version or switch to a specific one
@@ -329,6 +327,10 @@ func fetch(p *PacUnit) {
 			log.Fatalf("cannot parse %s - %v", descriptor_name, err)
 		}
 	}
+	if p.Origin != uri {
+		log.Printf("Package %s has origin %s, but was fetched from %s\n", p.Name, p.Origin, uri)
+	}
+
 	fetch_dependents(p)
 }
 
@@ -367,10 +369,9 @@ func fetch_dependents(p *PacUnit) {
 			//add new package
 			d := new(PacUnit)
 			d.Name = p.Depends[i].Name
-			d.Uri = p.Depends[i].Uri
 			d.Branch = p.Depends[i].Branch
 			all_packs = append(all_packs, d)
-			fetch(d)
+			fetch(d, p.Depends[i].Uri)
 			os.Chdir(cwd)
 			p.Depends[i].pack = d
 		} else {
@@ -527,13 +528,12 @@ func git_current_branch () string {
 }
 
 // Clone a repo
-func git_clone_package(p *PacUnit) {
+func git_clone_package(p *PacUnit, uri string) {
 	fullpath := filepath.Join(devroot, p.Name)
 	Verbosef("Cloning: %s in %s\n", p.Name, fullpath)
 
-  var uri = p.Uri
 	if uri == "" {
-		log.Fatalf("Package %s - Missing package location!", p.Name)
+		log.Fatalf("Package %s - Missing package location!", uri)
 	}
 	git_clone (uri, p.Branch, fullpath)
 }

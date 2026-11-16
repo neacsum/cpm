@@ -27,10 +27,10 @@ You need to create a JSON file called `cpm.json` in each repository:
 
 In `super_app`:
 ````JSON
-{ "name": "super_app", "git": "git@github.com:user/super_App.git",
+{ "name": "super_app", "origin": "git@github.com:user/super_App.git",
   "depends": [
-      {"name": "cool_A", "git": "git@github.com:user/cool_A.git"},
-      {"name": "cool_B", "git": "git@github.com:user/cool_B.git"}
+      {"name": "cool_A", "uri": "git@github.com:user/cool_A.git"},
+      {"name": "cool_B", "uri": "git@github.com:user/cool_B.git"}
   ],
   "build" : [
       {"os": "windows", "command": "msbuild", "args": ["super_app.proj"]},
@@ -40,9 +40,9 @@ In `super_app`:
 ````
 In `cool_A`:
 ````JSON
-{ "name": "cool_A", "git": "git@github.com:user/cool_A.git",
+{ "name": "cool_A", "origin": "git@github.com:user/cool_A.git",
   "depends": [
-      {"name": "utils", "git": "git@github.com:user/utils.git"},
+      {"name": "utils", "uri": "git@github.com:user/utils.git"},
   ],
   "build": [
       {"os": "windows", "command": "msbuild", "args": ["cool_a.proj"]},
@@ -53,9 +53,9 @@ In `cool_A`:
 
 In `cool_B`:
 ````JSON
-{ "name": "cool_B", "git": "git@github.com:user/cool_B.git",
+{ "name": "cool_B", "origin": "git@github.com:user/cool_B.git",
   "depends": [
-      {"name": "utils", "git": "git@github.com:user/utils.git"},
+      {"name": "utils", "uri": "git@github.com:user/utils.git"},
   ],
   "build": [
       {"os": "windows", "command": "msbuild", "args": ["cool_b.proj"]},
@@ -66,7 +66,7 @@ In `cool_B`:
 
 In `utils`:
 ````JSON
-{ "name": "utils", "git": "git@github.com:user/utils.git",
+{ "name": "utils", "origin": "git@github.com:user/utils.git",
   "build": [
       {"os": "windows", "command": "msbuild", "args": ["utils.proj"]},
       {"os": "linux", "command": "cmake"}
@@ -82,12 +82,12 @@ It will take care of pulling all the other repositories and issuing the build co
 
 ## 2. Code Layout Rules ##
 To be able to use this magic you have to adhere to a set of basic rules:
-> **RULE 1** - All projects have their own folder and all project folders are in one parent folder. The environment variable `DEV_ROOT` points to this root of development tree.
+> **RULE 1** - Flat layout: each project has its own directory and all project directories are children of one common parent directory. The environment variable `DEV_ROOT` points to this root of development tree.
 
 Here is a diagram showing the general code layout:
 ![](docs/diag1.svg)
 
-> **RULE 2** - Include files that need to be visible to users are placed in a subfolder of the `include` folder. The subfolder has the same name as the library.
+> **RULE 2** - Include files that need to be visible to users are placed in a sub-directory of the `include` directory with the same name as the library.
 
 Users of `cool_A` can refer to `hdr1.h` file like this:
 ````C
@@ -100,22 +100,22 @@ An additional advantage of this organization is that it prevents name clashes be
 ````
 <u>**Note:**</u> There is an enhancement to this rule: if the library package contains separate groups of files, they can be grouped together in *modules*. See below about multi-module libraries. Usually however, a library package has only one module.
 
-> **RULE 3** - Include folders of dependent modules are made visible through symbolic links
+> **RULE 3** - Include directories of dependent modules are made visible through symbolic links
 
-In the structure shown before, the application that uses `cool_A` and `cool_B` will have an `include` folder but in this folder there are _symbolic links_ to `cool_A` and `cool_B` include folders. The folder structure will look something like this (blue items in angle brackets denote symbolic links):
+In the structure shown before, the application that uses `cool_A` and `cool_B` will have an `include` directory, but in this directory there are _symbolic links_ to `cool_A` and `cool_B` include directories. The directory structure will look something like this (blue items in angle brackets denote symbolic links):
 
 ![](docs/diag2.svg)
 
-> **RULE 4** - All binary library packages reside in a `lib` folder at the root of development tree. Each package contains a _symbolic link_ to this folder.
+> **RULE 4** - All binary library packages reside in a `lib` directory at the root of development tree. Each package contains a _symbolic link_ to this directory.
 
-Without repeating the parts already shown of the files layout, here is the part related to `lib` folder (again, blue items denote symbolic links):
+Without repeating the parts already shown of the files layout, here is the part related to `lib` directory (again, blue items denote symbolic links):
 
 ![](docs/diag3.svg)
 
-If there are different flavors of link libraries (debug, release, 32-bit, 64-bit) they can be accommodated as subfolders of the `lib` folder.
+If there are different flavors of link libraries (debug, release, 32-bit, 64-bit) they can be accommodated as sub-directories of the `lib` directory.
 
 ### 2.1. Multi-module library packages ###
-Sometimes, a library may contain more than one group of files. For instance a communication library may contain a group of functions for serial communication, another for Bluetooth communication, and so on. We call these groups of files *modules*<sup>[1]</sup>. In this case, the header files can be divided in different folders, one for each module in the library:
+Sometimes, a library may contain more than one group of files. For instance a communication library may contain a group of functions for serial communication, another for Bluetooth communication, and so on. We call these groups of files *modules*<sup>[1]</sup>. In this case, the header files can be divided in different directories, one for each module in the library:
 
 ![](docs/diag4.svg)
 
@@ -129,9 +129,9 @@ If a dependent package wants to include only one module of the library, it can u
 Example:
 ````JSON
 "depends": [
-    {"name": "libcom", "modules": ["serial"], "git": "git@github.com:user/mml.git"}]
+    {"name": "libcom", "modules": ["serial"], "origin": "git@github.com:user/mml.git"}]
 ````
-This will produce the following folder structure (again, blue denotes symbolic links):  
+This will produce the following directory structure (again, blue denotes symbolic links):  
 ![](docs/diag4_1.svg)
 
 It is OK to refer more than one module:
@@ -139,7 +139,7 @@ It is OK to refer more than one module:
   "depends": [
       {
         "name": "libcom",  
-        "git": "git@github.com:user/mml.git", 
+        "uri": "git@github.com:user/mml.git", 
         "modules": ["serial", "bluetooth"]
       }]
 ````
@@ -147,6 +147,7 @@ It is OK to refer more than one module:
 Note that a library package with multiple modules still has only one binary `.lib` (or `.a`) file.
 ---
 <sup>1</sup> The word *module* is heavily overused in the software arena; adding one more use is not going to make much difference.
+
 ### 2.2. Weak Dependencies ###
 Sometimes it may happen that two modules are interdependent. For instance `cool_A` needs a type definition that is provided by `cool_B`. Symbolic links can take care of this situation like shown below:
 
@@ -157,7 +158,7 @@ In such cases, CPM has to fetch the packages and create the symbolic links but s
 ### 2.3. Compatibility with other code layout schemes ###
 The layout required by CPM is simple and, as such, very compatible with other layout recommendations. My personal favorite is [The Pitchfork Layout](https://joholl.github.io/pitchfork-website/). Note however the following differences:
 - PFL does not describe any mechanism for cooperation between different packages. The symbolic links mechanism described in this document is specific to CPM.
-- PFL does not use a shared `lib/` directory. The PFL `libs/` folder is used for a different purpose.
+- PFL does not use a shared `lib/` directory. The PFL `libs/` directory is used for a different purpose.
 
 ## 3. Installation ##
 CPM is written in Go. You can download a prebuilt version for [Windows](https://github.com/neacsum/cpm/releases/latest/download/cpm.exe) or [Ubuntu](https://github.com/neacsum/cpm/releases/latest/download/cpm). Alternatively, you can build it from source. To build it, you need to have the Go compiler [installed](https://go.dev/doc/install). Use the following command to build the executable:
@@ -182,7 +183,7 @@ Valid options are:
   - `-F` discards local changes when switching branches (issues a `git switch -f ...` command)
   - `-f` fetch-only (no build)
   - `-l` local-only (no pull)
-  - `--root <folder>` or `-r <folder>` set root of development tree, overriding `DEV_ROOT` environment variable
+  - `--root <dir>` or `-r <dir>` set root of development tree, overriding `DEV_ROOT` environment variable
   - `--uri <uri>` or `-u <uri>` URI for fetching root package
   - `--version` show program version
   - `-v` verbose
@@ -194,7 +195,7 @@ Following is a list of attributes that are recognized in the JSON file. Unknown 
 |Level | Attribute   | Value  | Semantics |
 |------|-------------|--------|-----------|
 | 1    | `name`      | string | Name of package |
-| 1    | `uri`       | string | Download URI for the package |
+| 1    | `origin`    | string | Download URI for the package |
 | 1    | `build`     | array  | Commands to be issued for building the package. |
 | 2    | `os`        | string | OS-es to which the build command applies <br/>(multiple OS-es are space-separated). Ex: `"windows"`, `"linux darwin"`, `"any"`|
 | 2    | `command`   | string | Command issued for building the package |
@@ -213,14 +214,14 @@ If a package name has been specified on the command line, CPM looks for the dire
 If no top level package has been specified on the command line, CPM assumes the current directory contains the top level package and proceeds to look for the `CPM.JSON` file.
 
 ### 6.1 Clone/Fetch
-For each dependent package, CPM checks if the project folder exists under the `DEV_ROOT` tree. If not, it issues a `git clone` command to bring the latest version of the main branch or a specific branch if specified on the command line (the `-b` command line switch).
+For each dependent package, CPM checks if the project directory exists under the `DEV_ROOT` tree. If not, it issues a `git clone` command to bring the latest version of the main branch or a specific branch if specified on the command line (the `-b` command line switch).
 
 If the repository already exists, CPM issues a `git pull ...` or a `git switch ...` command to bring in the latest version of the main branch or the requested branch.
 
 If CPM has been invoked with the `-l` command line switch, it skips this step.
 
 ### 6.2 Create Symlinks
-CPM creates symlinks to include directories of all dependent packages and to the main `lib` folder. If the symlinks already exist, it verifies they point to proper target.
+CPM creates symlinks to include directories of all dependent packages and to the main `lib` directory. If the symlinks already exist, it verifies they point to proper target.
 
 ### 6.3 Build
 The next step is to build each package by issuing the build commands appropriate for the OS environment. The `build` attribute contains an array of commands used to build the package. Each command has the following structure:
@@ -243,7 +244,7 @@ CPM can be tested using a [sample project](https://github.com/neacsum/example_su
 
 1. Make sure you have installed Visual Studio 2017 or higher (preferably VS2022).
 2. Download [CPM](https://github.com/neacsum/cpm/releases/latest/download/cpm.exe) program and place it somewhere in the path
-3. Create a `devroot` folder:
+3. (Optional) Create a `devroot` directory:
 ````
 c:\temp>mkdir devroot
 c:\temp>set DEV_ROOT=c:temp\devroot
@@ -261,7 +262,7 @@ If all goes well, you should have a file `c:\temp\devroot\super_app\build\bin\x6
 <u>__For Linux__</u>
 1. Make sure you have a C/C++ compiler installed. If not, `sudo apt install build-essential` should take care of that.
 2. Download [CPM](https://github.com/neacsum/cpm/releases/latest/download/cpm) program and place it somewhere in the path. This CPM program has no relation with the with the [Console Password Manager](https://github.com/comotion/cpm).
-3. Create a `devroot` folder:
+3. (Optional) Create a `devroot` directory:
 ````
 $mkdir devroot
 $export DEV_ROOT=devroot
@@ -290,24 +291,49 @@ env:
   USERPROFILE: .
   
 jobs:
-  build:
+  build-win:
     runs-on: windows-latest
-    
-    steps:      
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          path: super_app
+       
       - name: Get CPM
-        uses: engineerd/configurator@v0.0.10
+        uses: neacsum/configurator@v0.0.11
         with:
           name: cpm.exe
           url: https://github.com/neacsum/cpm/releases/latest/download/cpm.exe
-      
-      - name: Clone
-        run: git clone https://github.com/neacsum/example_super_app.git .\super_app
+     
+      - name: Build
+        run: cpm -v super_app
+       
+      - name: Run app
+        shell: cmd
+        run: .\super_app\build\x64\Release\super_app.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          path: super_app
+
+      - name: Get CPM
+        uses: neacsum/configurator@v0.0.11
+        with:
+          name: cpm
+          url: https://github.com/neacsum/cpm/releases/latest/download/cpm
 
       - name: Build
-        run: cpm -v -r . super_app
-        
+        run: cpm -v super_app
+
       - name: Run app
-        run: .\super_app\build\app\x64\Debug\super_app.exe
+        run: 
+          super_app/build/gcc/super_app
 ```
 It uses an action to [fetch](https://github.com/marketplace/actions/engineerd-configurator) the CPM executable, clones the repo to be built and invokes CPM to build it.
 
@@ -315,11 +341,11 @@ It uses an action to [fetch](https://github.com/marketplace/actions/engineerd-co
 As explained before, projects are laid out in a "flat" hierarchy of directories starting at `DEV_ROOT`. The `DEV_ROOT` directory can be specified either on command line (`-r` option) or through an environment variable.
 
 If `DEV_ROOT` is not set on command line or as an environment variable, CPM tries to find a reasonable location:
-- If the command line includes a URI for downloading the project, it assumes the current directory is going to be the root.
+- If the command line includes a URI for downloading the project (`-u` option), it assumes the current directory is going to be the root.
   
-- If the command line includes a project name and a directory with the same name exists and is a child of current directory, the current directory is going to be the root.
+- If the command line includes a project name, and a directory with the same name exists and is a child of current directory, the current directory is going to be the root.
   
-- If there is no project name or uri specified on command line, but in the current directory there is a file `cpm.json`, CPM assumes that is the project to build and the parent of the current directory is the DEV_ROOT directory.
+- If there is no project name or uri specified on command line, but in the current directory there is a file `cpm.json`, CPM assumes that current directory contains the project to build, and the parent of the current directory is the DEV_ROOT directory.
 
 The following flowchart summarizes these steps.
 
