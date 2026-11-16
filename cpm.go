@@ -50,7 +50,7 @@ import (
 	"time"
 )
 
-const Version = "V0.7.2"
+const Version = "V0.7.3"
 
 type Command struct {
 	Os   string
@@ -324,7 +324,8 @@ func fetch(p *PacUnit, uri string) {
 		Verbosef(" %s\\%s file not found. Assuming no dependencies\n", cwd, descriptor_name)
 	} else {
 		if err = json.Unmarshal(data, &p); err != nil {
-			log.Fatalf("cannot parse %s - %v", descriptor_name, err)
+			full_name,_ := filepath.Abs(descriptor_name)
+			log.Fatalf("cannot parse %s - %v", full_name, err)
 		}
 	}
 	if p.Origin != uri {
