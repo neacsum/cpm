@@ -136,7 +136,6 @@ func main() {
 		log.Fatalf("Root package cannot have a path - %s", flag.Arg(0))
 	}
 
-	var root = new (PacUnit)
 	if devroot == "" {
 		//Find a reasonable default for DEV_ROOT
 		if uri == "" && flag.NArg() == 0 {
@@ -153,6 +152,9 @@ func main() {
 		}
 	}
 	Verboseln("DEV_ROOT=", devroot)
+	os.Setenv("DEV_ROOT", devroot)
+
+	var root = new (PacUnit)
 
 	if uri != "" {
 		// URI specified -> try to clone or pull root package
